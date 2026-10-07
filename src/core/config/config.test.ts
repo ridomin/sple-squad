@@ -26,47 +26,36 @@ async function makeTempDir (): Promise<string> {
   return dir
 }
 
-describe('resolveConfig precedence (CLI-6: flag > process env > .env file > default)', () => {
+describe('resolveConfig precedence (CLI-6: flag > process env > default)', () => {
   it('falls back to the built-in default provider when nothing else is set', () => {
-    const config = resolveConfig({ processEnv: {}, envFileVars: {} })
+    const config = resolveConfig({ processEnv: {} })
     assert.equal(config.defaultProvider, 'spotify')
   })
 
-  it('uses the .env file value when process env and flag are absent', () => {
+  it('uses the process env value when the flag is absent', () => {
     const config = resolveConfig({
-      processEnv: {},
-      envFileVars: { [ENV_VAR_DEFAULT_PROVIDER]: 'youtube-music' }
+      processEnv: { [ENV_VAR_DEFAULT_PROVIDER]: 'youtube-music' }
     })
     assert.equal(config.defaultProvider, 'youtube-music')
   })
 
-  it('process env overrides the .env file', () => {
-    const config = resolveConfig({
-      processEnv: { [ENV_VAR_DEFAULT_PROVIDER]: 'fake' },
-      envFileVars: { [ENV_VAR_DEFAULT_PROVIDER]: 'youtube-music' }
-    })
-    assert.equal(config.defaultProvider, 'fake')
-  })
-
-  it('the --provider flag overrides process env and the .env file', () => {
+  it('the --provider flag overrides process env', () => {
     const config = resolveConfig({
       cliProvider: 'youtube-music',
-      processEnv: { [ENV_VAR_DEFAULT_PROVIDER]: 'fake' },
-      envFileVars: { [ENV_VAR_DEFAULT_PROVIDER]: 'spotify' }
+      processEnv: { [ENV_VAR_DEFAULT_PROVIDER]: 'fake' }
     })
     assert.equal(config.defaultProvider, 'youtube-music')
   })
 
-  it('treats an empty process env value as unset and falls through to the file', () => {
+  it('treats an empty process env value as unset and falls through to the default', () => {
     const config = resolveConfig({
-      processEnv: { [ENV_VAR_SPOTIFY_CLIENT_ID]: '   ' },
-      envFileVars: { [ENV_VAR_SPOTIFY_CLIENT_ID]: 'from-file' }
+      processEnv: { [ENV_VAR_SPOTIFY_CLIENT_ID]: '   ' }
     })
-    assert.equal(config.spotifyClientId, 'from-file')
+    assert.equal(config.spotifyClientId, null)
   })
 
   it('a client ID absent everywhere resolves to null (not a UsageError)', () => {
-    const config = resolveConfig({ processEnv: {}, envFileVars: {} })
+    const config = resolveConfig({ processEnv: {} })
     assert.equal(config.spotifyClientId, null)
     assert.equal(config.youtubeMusicClientId, null)
     assert.equal(config.googleClientSecret, null)
@@ -93,16 +82,27 @@ describe('resolveConfig precedence (CLI-6: flag > process env > .env file > defa
   })
 })
 
+
 describe('loadConfigFromDisk', () => {
+  // `.env` is loaded with `process.loadEnvFile` (ADR 0004 Amendment 1),
+  // which always merges into the real `process.env` — these tests touch a
+  // few real vars and must clean them up so they don't leak between tests.
+  const touchedEnvVars: string[] = []
+  afterEach(() => {
+    for (const key of touchedEnvVars.splice(0, touchedEnvVars.length)) {
+      Reflect.deleteProperty(process.env, key)
+    }
+  })
+
   it('is not an error when the .env file is missing', async () => {
     const dir = await makeTempDir()
     const envFilePath = join(dir, '.env')
-    const { config, warnings } = await loadConfigFromDisk({ envFilePath, processEnv: {} })
+    const { config, warnings } = await loadConfigFromDisk({ envFilePath })
     assert.equal(config.defaultProvider, 'spotify')
     assert.deepEqual(warnings, [])
   })
 
-  it('reads and merges values from a real .env file on disk', async () => {
+  it('loads values from a real .env file on disk into process.env', async () => {
     const dir = await makeTempDir()
     const envFilePath = join(dir, '.env')
     await writeFile(
@@ -111,8 +111,9 @@ describe('loadConfigFromDisk', () => {
       { mode: 0o600 }
     )
     await chmod(envFilePath, 0o600)
+    touchedEnvVars.push(ENV_VAR_SPOTIFY_CLIENT_ID, ENV_VAR_DEFAULT_PROVIDER)
 
-    const { config, warnings } = await loadConfigFromDisk({ envFilePath, processEnv: {} })
+    const { config, warnings } = await loadConfigFromDisk({ envFilePath })
     assert.equal(config.spotifyClientId, 'abc123')
     assert.equal(config.defaultProvider, 'youtube-music')
     assert.deepEqual(warnings, [])
@@ -123,22 +124,22 @@ describe('loadConfigFromDisk', () => {
     const envFilePath = join(dir, '.env')
     await writeFile(envFilePath, 'SPLE_DEFAULT_PROVIDER=spotify\n')
     await chmod(envFilePath, 0o644)
+    touchedEnvVars.push(ENV_VAR_DEFAULT_PROVIDER)
 
-    const { warnings } = await loadConfigFromDisk({ envFilePath, processEnv: {} })
+    const { warnings } = await loadConfigFromDisk({ envFilePath })
     assert.equal(warnings.length, 1)
     assert.match(warnings[0] ?? '', /is readable by other users/v)
   })
 
-  it('process env still overrides values loaded from the .env file', async () => {
+  it('a process env value set before loading wins over the .env file (CLI-6)', async () => {
     const dir = await makeTempDir()
     const envFilePath = join(dir, '.env')
     await writeFile(envFilePath, 'SPLE_DEFAULT_PROVIDER=youtube-music\n', { mode: 0o600 })
     await chmod(envFilePath, 0o600)
+    process.env[ENV_VAR_DEFAULT_PROVIDER] = 'fake'
+    touchedEnvVars.push(ENV_VAR_DEFAULT_PROVIDER)
 
-    const { config } = await loadConfigFromDisk({
-      envFilePath,
-      processEnv: { [ENV_VAR_DEFAULT_PROVIDER]: 'fake' }
-    })
+    const { config } = await loadConfigFromDisk({ envFilePath })
     assert.equal(config.defaultProvider, 'fake')
   })
 })

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm, writeFile, chmod } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { checkEnvFilePermissions, parseDotEnv } from './env-file.ts'
+import { checkEnvFilePermissions } from './env-file.ts'
 
 const tmpRoot = tmpdir()
 
@@ -18,52 +18,6 @@ async function makeTempDir (): Promise<string> {
   cleanupDirs.push(dir)
   return dir
 }
-
-describe('parseDotEnv', () => {
-  it('parses simple KEY=value pairs', () => {
-    const result = parseDotEnv('SPLE_SPOTIFY_CLIENT_ID=abc123\nSPLE_DEFAULT_PROVIDER=spotify\n')
-    assert.deepEqual(result, {
-      SPLE_SPOTIFY_CLIENT_ID: 'abc123',
-      SPLE_DEFAULT_PROVIDER: 'spotify'
-    })
-  })
-
-  it('ignores blank lines and comments', () => {
-    const result = parseDotEnv([
-      '# this is a comment',
-      '',
-      '   ',
-      'SPLE_DEFAULT_PROVIDER=spotify',
-      '# SPLE_SPOTIFY_CLIENT_ID=commented-out'
-    ].join('\n'))
-    assert.deepEqual(result, { SPLE_DEFAULT_PROVIDER: 'spotify' })
-  })
-
-  it('strips surrounding single or double quotes from values', () => {
-    const result = parseDotEnv([
-      'SPLE_SPOTIFY_CLIENT_ID="double-quoted"',
-      'SPLE_GOOGLE_CLIENT_SECRET=\'single-quoted\''
-    ].join('\n'))
-    assert.deepEqual(result, {
-      SPLE_SPOTIFY_CLIENT_ID: 'double-quoted',
-      SPLE_GOOGLE_CLIENT_SECRET: 'single-quoted'
-    })
-  })
-
-  it('trims whitespace around keys and values', () => {
-    const result = parseDotEnv('  SPLE_DEFAULT_PROVIDER  =   spotify  \n')
-    assert.deepEqual(result, { SPLE_DEFAULT_PROVIDER: 'spotify' })
-  })
-
-  it('ignores lines without a key=value separator', () => {
-    const result = parseDotEnv('not-a-valid-line\nSPLE_DEFAULT_PROVIDER=spotify')
-    assert.deepEqual(result, { SPLE_DEFAULT_PROVIDER: 'spotify' })
-  })
-
-  it('returns an empty object for empty content', () => {
-    assert.deepEqual(parseDotEnv(''), {})
-  })
-})
 
 describe('checkEnvFilePermissions', () => {
   it('returns null on win32 regardless of mode', async () => {

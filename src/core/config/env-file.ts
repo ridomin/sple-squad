@@ -1,56 +1,9 @@
-// Parsing and permission checks for the `.env` config file (ADR 0004 §1 and
-// Amendment 1 "`.env` syntax"). sple never writes `.env` — it only reads and
-// validates it.
+// Permission checks for the `.env` config file (ADR 0004 §1 and Amendment
+// 1). sple never writes `.env`. Parsing/loading is delegated to Node's
+// built-in `process.loadEnvFile` (see `config.ts`) rather than a hand-rolled
+// parser — this module only validates the file's POSIX permissions.
 import { constants as fsConstants } from 'node:fs'
 import { stat } from 'node:fs/promises'
-
-const COMMENT_PREFIX = '#'
-const KEY_VALUE_SEPARATOR = '='
-const EMPTY_LENGTH = 0
-const NOT_FOUND = -1
-const MIN_QUOTED_LENGTH = 2
-const QUOTE_LENGTH = 1
-const LINE_SPLIT_REGEXP = /\r\n|\n/v
-
-// Parses the subset of dotenv syntax ports must accept (Amendment 1):
-// - one `KEY=value` per line; blank lines and lines starting with `#` are
-//   ignored
-// - values may be wrapped in single or double quotes, which are removed
-// - no variable expansion, no multi-line values
-export function parseDotEnv (content: string): Record<string, string> {
-  const result: Record<string, string> = {}
-
-  for (const rawLine of content.split(LINE_SPLIT_REGEXP)) {
-    const line = rawLine.trim()
-    if (line.length === EMPTY_LENGTH || line.startsWith(COMMENT_PREFIX)) {
-      continue
-    }
-
-    const separatorIndex = line.indexOf(KEY_VALUE_SEPARATOR)
-    if (separatorIndex === NOT_FOUND) {
-      continue
-    }
-
-    const key = line.slice(EMPTY_LENGTH, separatorIndex).trim()
-    if (key.length === EMPTY_LENGTH) {
-      continue
-    }
-
-    const rawValue = line.slice(separatorIndex + QUOTE_LENGTH).trim()
-    result[key] = unquote(rawValue)
-  }
-
-  return result
-}
-
-function unquote (value: string): string {
-  const isDoubleQuoted = value.startsWith('"') && value.endsWith('"') && value.length >= MIN_QUOTED_LENGTH
-  const isSingleQuoted = value.startsWith('\'') && value.endsWith('\'') && value.length >= MIN_QUOTED_LENGTH
-  if (isDoubleQuoted || isSingleQuoted) {
-    return value.slice(QUOTE_LENGTH, -QUOTE_LENGTH)
-  }
-  return value
-}
 
 const OTHER_OR_GROUP_PERMISSIONS =
   fsConstants.S_IRWXG | fsConstants.S_IRWXO

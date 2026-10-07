@@ -1,10 +1,12 @@
 // Config precedence resolution (ADR 0004 §1, CLI-6): flags > process
-// environment > `.env` file > built-in defaults. This module does not do any
-// file I/O itself — see `loadConfigFromDisk` below for the thin I/O wrapper,
-// and `env-file.ts` for `.env` parsing/permission checks.
-import { readFile } from 'node:fs/promises'
+// environment > `.env` file > built-in defaults. `.env` loading is done with
+// Node's built-in `process.loadEnvFile` (ADR 0004 Amendment 1) — it merges
+// the file into `process.env` without overriding already-set variables, so
+// by the time `resolveConfig` runs, `process.env` already reflects the full
+// precedence. See `loadConfigFromDisk` below for the thin I/O wrapper, and
+// `env-file.ts` for the `.env` permission check.
 import { getConfigFilePath, type PlatformEnv } from './paths.ts'
-import { checkEnvFilePermissions, parseDotEnv } from './env-file.ts'
+import { checkEnvFilePermissions } from './env-file.ts'
 import type { ProviderId } from './types.ts'
 
 const DEFAULT_PROVIDER: ProviderId = 'spotify'
@@ -41,10 +43,10 @@ export interface ResolveConfigOptions {
   // The `--provider` CLI flag value, if given; the only flag CLI-6 defines
   // today. Wins over everything else.
   cliProvider?: string
-  // Defaults to `process.env`; override in tests to avoid mutating globals.
+  // Defaults to `process.env`; override in tests to avoid reading/mutating
+  // globals. Expected to already contain any `.env` values merged in by
+  // `process.loadEnvFile` (see `loadConfigFromDisk`).
   processEnv?: NodeJS.ProcessEnv
-  // Parsed contents of the `.env` file (see `parseDotEnv`); defaults to {}.
-  envFileVars?: Record<string, string>
 }
 
 function isValidProviderId (value: string): value is ProviderId {
@@ -55,31 +57,19 @@ function isSetValue (value: string | undefined): value is string {
   return value !== undefined && value.trim().length > EMPTY_LENGTH
 }
 
-// Looks up `key`, preferring the process environment over the parsed `.env`
-// file (CLI-6); an empty/whitespace-only value counts as unset (ADR 0004 §1).
-function pickEnvValue (
-  key: string,
-  processEnv: NodeJS.ProcessEnv,
-  envFileVars: Record<string, string>
-): string | undefined {
-  const { [key]: fromProcess } = processEnv
-  if (isSetValue(fromProcess)) {
-    return fromProcess.trim()
-  }
-  const { [key]: fromFile } = envFileVars
-  if (isSetValue(fromFile)) {
-    return fromFile.trim()
-  }
-  return undefined
+// Looks up `key` in the process environment; an empty/whitespace-only value
+// counts as unset (ADR 0004 §1).
+function pickEnvValue (key: string, processEnv: NodeJS.ProcessEnv): string | undefined {
+  const { [key]: value } = processEnv
+  return isSetValue(value) ? value.trim() : undefined
 }
 
 function resolveRequestedProvider (
   cliProvider: string | undefined,
-  processEnv: NodeJS.ProcessEnv,
-  envFileVars: Record<string, string>
+  processEnv: NodeJS.ProcessEnv
 ): ProviderId {
   const fromFlag = isSetValue(cliProvider) ? cliProvider.trim() : undefined
-  const requested = fromFlag ?? pickEnvValue(ENV_VAR_DEFAULT_PROVIDER, processEnv, envFileVars) ?? DEFAULT_PROVIDER
+  const requested = fromFlag ?? pickEnvValue(ENV_VAR_DEFAULT_PROVIDER, processEnv) ?? DEFAULT_PROVIDER
 
   if (!isValidProviderId(requested)) {
     throw new UsageError(
@@ -89,14 +79,16 @@ function resolveRequestedProvider (
   return requested
 }
 
-// Merges config sources per CLI-6 precedence: CLI flag > process env > .env
-// file > default. Empty/whitespace-only values count as unset (ADR 0004 §1).
+// Merges config sources per CLI-6 precedence: CLI flag > process env >
+// default. (The `.env` file is folded into `processEnv` beforehand by
+// `loadConfigFromDisk`/`process.loadEnvFile`.) Empty/whitespace-only values
+// count as unset (ADR 0004 §1).
 export function resolveConfig (options: ResolveConfigOptions = {}): SpleConfig {
-  const { cliProvider, processEnv = process.env, envFileVars = {} } = options
-  const pick = (key: string): string | undefined => pickEnvValue(key, processEnv, envFileVars)
+  const { cliProvider, processEnv = process.env } = options
+  const pick = (key: string): string | undefined => pickEnvValue(key, processEnv)
 
   return {
-    defaultProvider: resolveRequestedProvider(cliProvider, processEnv, envFileVars),
+    defaultProvider: resolveRequestedProvider(cliProvider, processEnv),
     spotifyClientId: pick(ENV_VAR_SPOTIFY_CLIENT_ID) ?? null,
     youtubeMusicClientId: pick(ENV_VAR_YOUTUBE_MUSIC_CLIENT_ID) ?? null,
     googleClientSecret: pick(ENV_VAR_GOOGLE_CLIENT_SECRET) ?? null,
@@ -116,7 +108,7 @@ export interface LoadConfigFromDiskOptions {
 export interface LoadConfigResult {
   config: SpleConfig
   // Non-fatal messages for the CLI to print to stderr (ADR 0004 §1,
-  // Amendment 1): a parse failure or a too-permissive `.env` file.
+  // Amendment 1): a load failure or a too-permissive `.env` file.
   warnings: string[]
 }
 
@@ -124,44 +116,41 @@ function isErrnoException (err: unknown): err is NodeJS.ErrnoException {
   return err instanceof Error && 'code' in err
 }
 
-interface EnvFileReadResult {
-  vars: Record<string, string>
-  warnings: string[]
-}
-
-async function readEnvFile (envFilePath: string): Promise<EnvFileReadResult> {
+// Loads `<configDir>/.env` into `process.env` (if present) with Node's
+// built-in `process.loadEnvFile` — it never overrides a variable that's
+// already set, which is exactly the CLI-6 "process env > .env file"
+// precedence. A missing file is not an error (ADR 0004 §3).
+async function loadEnvFileVars (envFilePath: string): Promise<string[]> {
   const warnings: string[] = []
   try {
-    const content = await readFile(envFilePath, 'utf8')
-    const vars = parseDotEnv(content)
+    process.loadEnvFile(envFilePath)
     const permissionWarning = await checkEnvFilePermissions(envFilePath)
     if (permissionWarning !== null) {
       warnings.push(permissionWarning)
     }
-    return { vars, warnings }
   } catch (err) {
     if (isErrnoException(err) && err.code === 'ENOENT') {
       // Missing file is not an error (ADR 0004 §3).
-      return { vars: {}, warnings }
+      return warnings
     }
     const reason = err instanceof Error ? err.message : String(err)
     warnings.push(`Failed to load .env: ${reason}`)
-    return { vars: {}, warnings }
   }
+  return warnings
 }
 
-// Reads `<configDir>/.env` (if present), parses it, and resolves the final
-// config per CLI-6 precedence. A missing file is not an error. A file that
-// cannot be read/parsed produces a warning and the CLI continues without it
-// (ADR 0004 §3).
+// Loads `<configDir>/.env` (if present) into `process.env`, then resolves
+// the final config per CLI-6 precedence. A missing file is not an error. A
+// file that cannot be loaded produces a warning and the CLI continues
+// without it (ADR 0004 §3).
 export async function loadConfigFromDisk (
   options: LoadConfigFromDiskOptions = {}
 ): Promise<LoadConfigResult> {
   const { cliProvider, processEnv, envFilePath, platformEnv } = options
   const resolvedEnvFilePath = envFilePath ?? getConfigFilePath(ENV_FILE_NAME, platformEnv)
-  const { vars: envFileVars, warnings } = await readEnvFile(resolvedEnvFilePath)
+  const warnings = await loadEnvFileVars(resolvedEnvFilePath)
 
-  const resolveOptions: ResolveConfigOptions = { envFileVars }
+  const resolveOptions: ResolveConfigOptions = {}
   if (cliProvider !== undefined) {
     resolveOptions.cliProvider = cliProvider
   }
