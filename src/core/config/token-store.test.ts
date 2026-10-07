@@ -2,13 +2,12 @@ import { describe, it, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { tmpdir } from 'node:os'
 import { platform } from 'node:process'
 import { loadTokens, saveTokens, deleteTokens } from './token-store.ts'
 import type { StoredToken } from './types.ts'
 
-const repoRoot = fileURLToPath(new URL('../../../', import.meta.url))
-const tmpRoot = join(repoRoot, 'tmp')
+const tmpRoot = tmpdir()
 
 const cleanupDirs: string[] = []
 afterEach(async () => {

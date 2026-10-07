@@ -2,7 +2,7 @@ import { describe, it, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, rm, writeFile, chmod } from 'node:fs/promises'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { tmpdir } from 'node:os'
 import {
   resolveConfig,
   loadConfigFromDisk,
@@ -12,8 +12,7 @@ import {
   ENV_VAR_ENABLE_FAKE_PROVIDER
 } from './config.ts'
 
-const repoRoot = fileURLToPath(new URL('../../../', import.meta.url))
-const tmpRoot = join(repoRoot, 'tmp')
+const tmpRoot = tmpdir()
 
 const cleanupDirs: string[] = []
 afterEach(async () => {

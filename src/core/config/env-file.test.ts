@@ -2,11 +2,10 @@ import { describe, it, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, rm, writeFile, chmod } from 'node:fs/promises'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { tmpdir } from 'node:os'
 import { checkEnvFilePermissions, parseDotEnv } from './env-file.ts'
 
-const repoRoot = fileURLToPath(new URL('../../../', import.meta.url))
-const tmpRoot = join(repoRoot, 'tmp')
+const tmpRoot = tmpdir()
 
 const cleanupDirs: string[] = []
 afterEach(async () => {
