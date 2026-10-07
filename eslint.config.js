@@ -1,33 +1,20 @@
-import js from '@eslint/js';
-import tseslint from 'typescript-eslint';
-import eslintConfigPrettier from 'eslint-config-prettier';
+import love from 'eslint-config-love'
 
-export default tseslint.config(
+export default [
   {
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**', '.squad/**', 'docs/**'],
+    ignores: ['dist/**', 'node_modules/**', 'coverage/**', '.squad/**', 'docs/**']
   },
-  js.configs.recommended,
-  ...tseslint.configs.recommended,
-  eslintConfigPrettier,
   {
-    files: ['src/**/*.ts'],
-    languageOptions: {
-      parserOptions: {
-        project: './tsconfig.json',
-        tsconfigRootDir: import.meta.dirname,
-      },
-    },
+    ...love,
+    files: ['src/**/*.ts']
+  },
+  {
+    // node:test's describe/it return promises that are intentionally not
+    // awaited, and exit-code literals read fine as plain numbers in assertions.
+    files: ['src/**/*.test.ts'],
     rules: {
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
-      ],
-    },
-  },
-  {
-    // Root-level config files (this file, vitest.config.ts) aren't part of
-    // the src/ TS program, so lint them without type-aware rules.
-    files: ['*.config.ts', '*.config.js'],
-    ...tseslint.configs.disableTypeChecked,
-  },
-);
+      '@typescript-eslint/no-floating-promises': 'off',
+      '@typescript-eslint/no-magic-numbers': 'off'
+    }
+  }
+]

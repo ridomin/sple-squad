@@ -17,20 +17,14 @@
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch",
     "start": "node dist/cli/index.js",
-    "test": "vitest run",
+    "test": "node --test src",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "lint:fix": "eslint . --fix"
   },
   "devDependencies": {
-    "@eslint/js": "^9.13.0",
     "@types/node": "^22.9.0",
-    "eslint": "^9.13.0",
-    "eslint-config-prettier": "^9.1.0",
-    "prettier": "^3.3.3",
-    "typescript": "^5.6.3",
-    "typescript-eslint": "^8.12.2",
-    "vitest": "^5.0.3"
+    "eslint": "^10.12.0",
+    "eslint-config-love": "^158.0.0",
+    "typescript": "^5.6.3"
   }
 }
