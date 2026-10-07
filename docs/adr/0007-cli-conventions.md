@@ -3,10 +3,10 @@
 - **Status:** Accepted (2026-10-02); amended 2026-10-07 (Amendment 1)
 - **Date:** 2026-10-02
 - **Deciders:** project owner (user); architect (author)
-- **Related:** `docs/requirements.md` CLI-1 to CLI-8, NFR-3, NFR-4, FR-SEARCH-1/2/4, FR-PL-1 to FR-PL-4, FR-PL-6, FR-EXP-1/6, FR-AUTH-4; ADR 0003 (Provider interface, incl. Amendment 1); ADR 0005 (Canonical track model); ADR 0008 (Canonical playlist file, M1-25)
+- **Related:** `docs/requirements.md` CLI-1 to CLI-8, NFR-3, NFR-4, FR-SEARCH-1/2/4, FR-PL-1 to FR-PL-4, FR-PL-6, FR-EXP-1/6, FR-AUTH-4; ADR 0003 (Provider interface, incl. Amendment 1); ADR 0005 (Canonical track model); ADR 0006 (Stack decision); ADR 0008 (Canonical playlist file, M1-25)
 - **Supersedes:** n/a
 
-> ADR 0006 (stack) is reserved for M1-29.
+> ADR 0006 (stack) is recorded in [ADR 0006](0006-stack-decision.md).
 
 ## Context
 
