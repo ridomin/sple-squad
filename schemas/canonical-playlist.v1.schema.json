@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/ridomin/sple/main/schemas/canonical-playlist.v1.schema.json",
+  "title": "CanonicalPlaylistFile v1",
+  "description": "sple canonical playlist export format v1 (ADR-0005, ADR-0008). Matches src/core/export/format.ts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "exportedAt", "generator", "source", "playlist", "tracks", "unsupportedItems"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "description": "Always 1 for this schema. Readers must reject other values (ADR-0008 \u00a71)."
+    },
+    "exportedAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+      "description": "ISO 8601 UTC timestamp, e.g. Date#toISOString() (ADR-0008 \u00a71)."
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "sple" },
+        "version": { "type": "string" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "kind"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "Provider ID (e.g. 'spotify', 'youtube-music'). Any lower-case ID is accepted so new providers do not need a schema change (ADR-0008 \u00a71)."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["playlist", "liked"]
+        },
+        "userId": {
+          "type": "string"
+        }
+      }
+    },
+    "playlist": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "trackCount"],
+      "properties": {
+        "ref": { "type": "string" },
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "owner": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id"],
+          "properties": {
+            "id": { "type": "string" },
+            "displayName": { "type": "string" }
+          }
+        },
+        "public": { "type": "boolean" },
+        "collaborative": { "type": "boolean" },
+        "url": { "type": "string" },
+        "trackCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "tracks.length + unsupportedItems.length for this file, not the provider's reported total (ADR-0008 \u00a71)."
+        }
+      }
+    },
+    "tracks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/trackWithPosition" }
+    },
+    "unsupportedItems": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/unsupportedItem" }
+    }
+  },
+  "if": {
+    "type": "object",
+    "required": ["source"],
+    "properties": {
+      "source": {
+        "type": "object",
+        "required": ["kind"],
+        "properties": {
+          "kind": { "const": "liked" }
+        }
+      }
+    }
+  },
+  "then": {
+    "type": "object",
+    "required": ["playlist"],
+    "properties": {
+      "playlist": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "const": "Liked Songs" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "canonicalTrack": {
+      "type": "object",
+      "required": ["title", "artists", "refs"],
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "The track's canonical title. Never empty; a missing title maps to '(untitled)' (ADR-0005 Amendment 1)."
+        },
+        "artists": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "Artist display names in provider order. Never empty; a missing artist maps to ['Unknown Artist'] (ADR-0005 Amendment 1)."
+        },
+        "album": {
+          "type": "string",
+          "description": "Album display name. Absent if the provider has no album context."
+        },
+        "durationMs": {
+          "type": "number",
+          "description": "Track duration in milliseconds. Absent if the provider doesn't report duration."
+        },
+        "isrc": {
+          "type": ["string", "null"],
+          "description": "Three-state field (ADR-0005 \u00a75): absent = not yet resolved, null = provider confirmed none, string = resolved ISRC."
+        },
+        "refs": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Provider ID -> provider-specific track ref (ADR-0003 \u00a73.1 canonical ref forms). Keyed by arbitrary provider ID, so this object allows additional properties."
+        },
+        "addedAt": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+          "description": "ISO 8601 UTC timestamp of when the track was added to the source playlist."
+        }
+      }
+    },
+    "trackWithPosition": {
+      "type": "object",
+      "allOf": [
+        { "$ref": "#/$defs/canonicalTrack" },
+        {
+          "type": "object",
+          "required": ["position"],
+          "properties": {
+            "position": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "1-based position in the source order, shared with unsupportedItems[].position (ADR-0008 \u00a71)."
+            }
+          }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "unsupportedItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["position", "kind"],
+      "properties": {
+        "position": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based position shared with tracks[].position (ADR-0008 \u00a71)."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["local", "episode", "unavailable"]
+        },
+        "name": { "type": "string" },
+        "ref": { "type": "string" }
+      }
+    }
+  }
+}
