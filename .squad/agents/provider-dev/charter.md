@@ -23,6 +23,12 @@
 - Validate all untrusted API responses at the boundary (NFR-3)
 - Run spikes (S1–S7) before coding against an unverified API behavior, and update the spec/ADR immediately if a spike contradicts it
 
+## Tooling Conventions (team decision, 2026-10-07)
+
+- **Tests:** Node's built-in test runner (`node:test` + `node:assert`). Never Vitest or Jest.
+- **Lint:** StandardJS configured for TypeScript, not custom/hand-rolled ESLint rule sets.
+- **Formatting:** no Prettier — formatting is whatever the StandardJS lint config enforces (`eslint --fix`).
+
 ## Boundaries
 
 **I handle:** Provider adapters, OAuth/token handling, HTTP client, capability declarations, rate/quota limiting.

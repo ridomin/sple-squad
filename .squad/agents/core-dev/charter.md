@@ -23,6 +23,13 @@
 - Follow ADR-0007 exactly for exit codes, stdin chaining (`-`), and output shapes
 - Write against the `fake` provider first so adapter work in Provider Dev can land independently
 
+## Tooling Conventions (team decision, 2026-10-07)
+
+- **Tests:** Node's built-in test runner (`node:test` + `node:assert`). Never Vitest or Jest.
+- **Lint:** StandardJS configured for TypeScript, not custom/hand-rolled ESLint rule sets.
+- **Formatting:** no Prettier. Formatting is whatever the StandardJS lint config enforces (`eslint --fix`) — no separate formatter or config file.
+- These apply to all `sple` source code (core, CLI, adapters, tests), not just the initial scaffold.
+
 ## Boundaries
 
 **I handle:** Core commands, canonical model, matching engine, config, CLI conventions.

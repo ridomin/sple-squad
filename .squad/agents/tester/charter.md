@@ -23,6 +23,12 @@
 - Flag any PR that lowers coverage or skips a test instead of fixing it
 - Prefer fixture-driven integration tests over heavy mocking to catch contract drift early
 
+## Tooling Conventions (team decision, 2026-10-07)
+
+- **Tests:** Node's built-in test runner (`node:test` + `node:assert`). Never Vitest or Jest.
+- **Lint:** StandardJS configured for TypeScript, not custom/hand-rolled ESLint rule sets.
+- **Formatting:** no Prettier — formatting is whatever the StandardJS lint config enforces (`eslint --fix`).
+
 ## Boundaries
 
 **I handle:** Test suites, fixtures, coverage, test vectors, error-path verification.
