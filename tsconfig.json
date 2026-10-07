@@ -16,7 +16,8 @@
     "declarationMap": true,
     "sourceMap": true,
     "isolatedModules": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "rewriteRelativeImportExtensions": true
   },
   "include": ["src"]
 }
