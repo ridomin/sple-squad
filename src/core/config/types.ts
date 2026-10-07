@@ -1,9 +1,9 @@
 // Shared types for the config/token-store modules (ADR 0004). `ProviderId`
-// mirrors ADR 0003's definition; it is re-declared here (not imported) because
-// the provider module is still a placeholder (issue #3) and this module must
-// not depend on unimplemented code. Once #3 lands, this should become a
-// re-export of the provider module's `ProviderId`.
-export type ProviderId = 'spotify' | 'youtube-music' | 'fake'
+// is re-exported from the provider module (issue #3 landed) so the two
+// modules share one definition instead of two copies that could drift.
+import type { ProviderId } from '../provider/capabilities.ts'
+
+export type { ProviderId }
 
 // A single stored OAuth token for one provider account (ADR 0004 Amendment 1).
 export interface StoredToken {

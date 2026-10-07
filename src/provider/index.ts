@@ -1,5 +1,6 @@
-// Placeholder for the Provider interface and adapters (Spotify, YouTube Music,
-// fake provider). Real implementations land in issues #3-#8.
-// Intentionally empty for now — exists so the directory compiles and other
-// milestones have somewhere to land.
-export {}
+// Placeholder for provider adapters (Spotify, YouTube Music, fake provider).
+// The `Provider` interface and capability types (issue #3) now live in
+// `../core/provider/`; re-exported here so adapter code under this directory
+// can import from a relative sibling path. Real adapters land in issues #4,
+// #6, #8.
+export * from '../core/provider/index.ts'
