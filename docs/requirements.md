@@ -1,6 +1,6 @@
 # sple — Requirements
 
-> Status: **Draft v0.4** (2026-10-07). v0.4 is the spec review for ports: the requirements and ADRs now describe `sple` precisely enough to implement it in another language, decisions are recorded in [§10](#10-open-questions-and-decisions) (Q19–Q26), and places where the TypeScript code differs from the spec are listed in [§12](#12-implementation-status-and-known-deviations). v0.3 incorporated the grill-me review of v0.2. Open questions and decisions are tracked in §10 and `docs/adr/`.
+> Status: **Draft v0.4** (2026-10-07). v0.4 is the spec review for ports: the requirements and ADRs now describe `sple` precisely enough to implement it in another language, decisions are recorded in [§10](#10-open-questions-and-decisions) (Q19–Q26). **No implementation exists yet** (confirmed 2026-10-07 — this repo currently contains only `docs/`); §12 is reserved for implementation deviations and will start being populated once code lands. v0.3 incorporated the grill-me review of v0.2. Open questions and decisions are tracked in §10 and `docs/adr/`.
 >
 > **Reading order for a port:** this file (what), then ADR 0003 (provider interface), ADR 0004 (files), ADR 0005 (track model), ADR 0007 (CLI contract), ADR 0008 (canonical file + `schemas/`), ADR 0009 (matching), ADR 0010 (HTTP and OAuth). ADRs 0001/0002 are background for Amazon and YouTube.
 
@@ -219,16 +219,18 @@ Command grammar, output modes, `--json` shapes, error output, stdin input, parti
 16. ~~**MVP value**~~ **Resolved (grill-me):** M1 (Spotify-only, no migration) is an acceptable first release. Switcher persona is post-MVP, delivered in M4b.
 17. ~~**Playlist name matching**~~ **Resolved (grill-me):** ambiguous names (matching multiple playlists) fail with exit 2 and list the matches. Applies to all commands that accept a playlist name (show, remove, edit). Users can use IDs or URIs to bypass ambiguity.
 18. ~~**Playlist filtering**~~ **Resolved (grill-me):** use `--owned` and `--followed` flags; drop `--mine`. Add `--filter <substring|regex>` to `playlist list` for name filtering (FR-PL-1). Move playlist-level search capability from FR-SEARCH-5 to FR-PL-1.
-19. ~~**Spec vs code**~~ **Resolved (2026-10-07, spec review):** where the docs were stale and the code was right, the docs now follow the code. Where the code looked wrong, each case was decided on its own (Q20–Q26), and the TypeScript differences are listed in §12.
+19. ~~**Spec vs code**~~ **Resolved (2026-10-07, spec review):** this pass reconciled internal inconsistencies within the spec itself (Q20–Q26); **note (2026-10-07, corrected):** no implementation existed at the time of this review, so "the code was right" / "the code looked wrong" language in the original Q19 entry is historical framing only and must not be read as evidence that any TypeScript code exists — it does not. §12 is not yet populated.
 20. ~~**Unsupported playlist items**~~ **Resolved (2026-10-07):** providers drop local files, episodes and unavailable items; positions are `1..k` over exported tracks and `unsupportedItems` stays empty for now, with a stderr warning giving the count (ADR-0007/0008 amendments).
 21. ~~**Read page size**~~ **Resolved (2026-10-07):** new capability `readPageSize`; `maxTracksPerRequest` is for writes only (ADR-0003 Amendment 2).
 22. ~~**Matching API**~~ **Resolved (2026-10-07):** core owns strategies and scoring; adapters own query syntax through `searchTracks(TrackQuery)`, which replaces `resolveTrack`; one `MatchCandidate` type (ADR-0003 Amendment 2, ADR-0009 Amendment 1).
 23. ~~**CSV import**~~ **Resolved (2026-10-07):** infer the source provider from the refs with `parseTrackRef`; default name is the file name; unknown extensions are a usage error (ADR-0008 Amendment 1).
 24. ~~**Errors during matching**~~ **Resolved (2026-10-07):** auth, quota and rate-limit errors stop the import with their exit code and nothing is created; other errors mark one track unmatched (ADR-0009 Amendment 1).
 25. ~~**Metadata scoring**~~ **Resolved (2026-10-07):** a fixed algorithm with test vectors: NFKD plus mark stripping, punctuation folding, a fixed decoration list, duration only when both sides have it, and a title/artist overlap gate (ADR-0009 Amendment 1; fixes #25, #30 in the spec).
-26. ~~**YouTube adapter and fake provider**~~ **Resolved (2026-10-07):** ADR-0002/0003 stay the YouTube target and the TypeScript adapter is an M4 preview; the fake provider is opt-in via `SPLE_ENABLE_FAKE_PROVIDER=1`. `import` follows the ADR-0007 output contract (A9).
+26. ~~**YouTube adapter and fake provider**~~ **Resolved (2026-10-07):** ADR-0002/0003 stay the YouTube target and the TypeScript adapter, once built, will ship as an M4 preview; the fake provider is opt-in via `SPLE_ENABLE_FAKE_PROVIDER=1`. `import` follows the ADR-0007 output contract (A9).
 
 ### Spikes (verify against the live API before the milestone noted)
+
+> **Editor's note (2026-10-07):** the detailed report file `docs/spikes/M1-spotify-spikes.md`, linked from every S1–S4 row below, does **not exist in this repository** — only `docs/requirements.md` and `docs/adr/` are present; there is no `docs/spikes/` directory. The dated resolutions below (e.g. "Resolved 2026-10-02") may represent genuine manual API research (e.g. via curl/Postman) done ahead of any code existing, in which case the report file simply needs to be authored/committed and the links fixed — or they may be stale/fabricated placeholders that need to be re-verified once M1 starts. This cannot be determined from the repo alone; **a human (Rido) must confirm which it is** before M1 work relies on these results.
 
 | ID | Before | Question | Resolution rule |
 |---|---|---|---|
@@ -240,20 +242,23 @@ Command grammar, output modes, `--json` shapes, error output, stdin input, parti
 
 ## 11. Milestones
 
-| Milestone | Scope |
-|---|---|
-| **M0 — Foundations** | Repo tooling, provider interface + capabilities ([ADR-0003](adr/0003-provider-interface-and-capabilities.md)) + fake provider, config, multi-provider token store (FR-AUTH-3/6), HTTP client, ADRs for the stack and canonical model. |
-| **M1 — Spotify MVP** | Spikes S1–S4 first. FR-AUTH (M), FR-SEARCH (M), FR-PL (M), FR-EXP (M, including Liked Songs), CLI-1…8. |
-| **M2 — Spotify polish** | FR-PL-5 (edit), FR-SEARCH-3 (field filters), FR-EXP-5 (export all), FR-PL-1 `--filter` option. |
-| **M3 — Import + matching** | FR-EXP-7, matching engine (strategy chain, metadata matching as the core), match report (tested against the fake provider). **Done 2026-10-05**; playlist creation landed in M3.1 (#23). The spec review of 2026-10-07 changed parts of the contract; see §12. |
-| **M4a — YouTube Music, read-only** | A preview adapter already exists in the TypeScript code (§12); it does not yet meet this milestone. Spikes S5–S7 first. `docs/PRIVACY.md` (NFR-9) before any YouTube data is stored. Google auth (login/logout with revocation/status), search, `playlist list/show`, export, approximate Liked export. Uses `youtube.readonly` only. |
-| **M4b — YouTube Music, writes + migrate** | Create/remove playlists, populate-playlist, quota ledger and cost estimate, resumable `migrate` (FR-MIG). Enables Switcher persona. |
-| **Later** | Other providers, unscheduled. |
+> **Status (2026-10-07):** no implementation exists yet — this repo contains only `docs/`. Every milestone below is **not started**. The scope descriptions define what each milestone covers once work begins; none should be read as completed. **M0 — Foundations** is the next milestone to execute.
+
+| Milestone | Scope | Status |
+|---|---|---|
+| **M0 — Foundations** | Repo tooling, provider interface + capabilities ([ADR-0003](adr/0003-provider-interface-and-capabilities.md)) + fake provider, config, multi-provider token store (FR-AUTH-3/6), HTTP client, ADRs for the stack and canonical model. | Not started — next up |
+| **M1 — Spotify MVP** | Spikes S1–S4 first. FR-AUTH (M), FR-SEARCH (M), FR-PL (M), FR-EXP (M, including Liked Songs), CLI-1…8. | Not started |
+| **M2 — Spotify polish** | FR-PL-5 (edit), FR-SEARCH-3 (field filters), FR-EXP-5 (export all), FR-PL-1 `--filter` option. | Not started |
+| **M3 — Import + matching** | FR-EXP-7, matching engine (strategy chain, metadata matching as the core), match report (tested against the fake provider). | Not started |
+| **M4a — YouTube Music, read-only** | Spikes S5–S7 first. `docs/PRIVACY.md` (NFR-9) before any YouTube data is stored. Google auth (login/logout with revocation/status), search, `playlist list/show`, export, approximate Liked export. Uses `youtube.readonly` only. | Not started |
+| **M4b — YouTube Music, writes + migrate** | Create/remove playlists, populate-playlist, quota ledger and cost estimate, resumable `migrate` (FR-MIG). Enables Switcher persona. | Not started |
+| **Later** | Other providers, unscheduled. | Not started |
 
 ## 12. Implementation status and known deviations
 
-The specification (this file and the ADRs) is the target. This section lists where the TypeScript reference implementation on `main` (2026-10-07) does not yet match it. A port should implement the spec, not these deviations. Each row is removed when the code is fixed.
+The specification (this file and the ADRs) is the target. This section is reserved to list where a reference implementation does not yet match it, so a port can tell the spec apart from implementation quirks. **As of 2026-10-07, no implementation exists in this repository**, so there is nothing to compare against the spec yet and the table below is empty. This section will start being populated once code lands (first candidate: the M0 reference implementation), and each row is removed again when the corresponding code is fixed.
 
-| # | Spec | TypeScript today | Issue |
+| # | Spec | Reference implementation today | Issue |
 |---|---|---|---|
-| D12 | YouTube values in ADR-0003 §5 and ADR-0002 (M4a/M4b) | Preview adapter: scopes `youtube` + `userinfo.profile` from the first login; no scope checks; `quotaModel` is `rate-limited` (no daily ledger); `getLikedTracks` returns nothing; `search` ignores `--type`; `listPlaylists` ignores `--owned`/`--followed` and marks every playlist owned; logout reports deleting a match cache and migration state that do not exist; no `docs/PRIVACY.md`; spikes S5–S7 not run | #65 |
+| — | *(none — no code exists yet)* | | |
+
