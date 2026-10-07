@@ -1,0 +1,30 @@
+{
+  "name": "sple",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Command-line tool for managing music-streaming playlists (Spotify first, provider-extensible).",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "bin": {
+    "sple": "dist/cli/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "start": "node dist/cli/index.js",
+    "test": "node --test",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "eslint": "^10.12.0",
+    "eslint-config-love": "^158.0.0",
+    "typescript": "^5.6.3"
+  }
+}
