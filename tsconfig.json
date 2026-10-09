@@ -6,7 +6,6 @@
     "rewriteRelativeImportExtensions": true,
     "lib": ["ES2024"],
     "outDir": "dist",
-    "rootDir": "src",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
@@ -20,5 +19,5 @@
     "verbatimModuleSyntax": true,
     "rewriteRelativeImportExtensions": true
   },
-  "include": ["src"]
+  "include": ["src", "schemas"]
 }
