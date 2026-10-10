@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "id": "49fe0e49-e48b-4c4e-891b-121474b925e0",
+    "class": "POLICY",
+    "loadGuidance": "ALWAYS",
+    "title": "Reduce model cost for pre-designed tasks",
+    "path": ".squad/memory/policy-inbox/rido-via-copilot-reduce-model-cost-for-pre-designed-tasks-49fe0e49.md",
+    "status": "active",
+    "createdAt": "2026-10-10T16:39:09.524Z",
+    "updatedAt": "2026-10-10T16:39:09.524Z"
+  }
+]
