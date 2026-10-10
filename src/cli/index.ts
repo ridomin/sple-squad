@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 import { startCli } from './framework.ts'
+import { createPlaylistCommands, resolvePlaylistProvider } from './commands/playlist.ts'
+import { registerCommand } from './registry.ts'
+
+for (const command of createPlaylistCommands(resolvePlaylistProvider)) {
+  registerCommand(command)
+}
 
 export { parseCommandArguments, parseGlobalArguments } from './args.ts'
 export type {
