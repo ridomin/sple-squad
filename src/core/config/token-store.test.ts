@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { platform } from 'node:process'
 import { loadTokens, saveTokens, deleteTokens } from './token-store.ts'
 import type { StoredToken } from './types.ts'
+import { redactSensitiveValues } from '../security/secrets.ts'
 
 const tmpRoot = tmpdir()
 
@@ -91,6 +92,10 @@ describe('saveTokens / loadTokens round trip', () => {
     const loaded = await loadTokens('spotify', { filePath })
 
     assert.deepEqual(loaded, token)
+    assert.equal(
+      redactSensitiveValues(`${token.accessToken} ${token.refreshToken ?? ''}`),
+      '[REDACTED] [REDACTED]'
+    )
   })
 
   it('creates the config directory if it does not exist yet', async () => {

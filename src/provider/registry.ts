@@ -1,8 +1,8 @@
 // Provider registration gate (ADR-0003 §5, PRV-6): the `fake` provider is
 // constructible unconditionally (see `../core/provider/fake/`), but it is
 // only *registered* for CLI use when `SPLE_ENABLE_FAKE_PROVIDER=1` (reusing
-// `resolveConfig`'s precedence — flags > process env > `.env` file >
-// default — so the gate agrees with the rest of the config module, ADR 0004
+// `resolveConfig`'s precedence — flags > process env > default — so the gate
+// agrees with the rest of the config module, ADR 0004
 // §1). Real adapters (Spotify, YouTube Music) register unconditionally once
 // they land (issues #6, #8); this module stays the single place the CLI
 // asks "which providers exist right now".
@@ -14,7 +14,7 @@ import type { CreateFakeProviderOptions } from '../core/provider/fake/index.ts'
 import type { Provider } from '../core/provider/index.ts'
 
 export interface ProviderRegistryOptions {
-  /** Overrides env/`.env`-resolved config; mainly for tests. Defaults to `resolveConfig()`. */
+  /** Overrides resolved config; mainly for tests. Defaults to `resolveConfig()`. */
   config?: SpleConfig
   /** Fixtures/capabilities for the fake provider, when registered. */
   fakeProviderOptions?: CreateFakeProviderOptions
