@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 import { startCli } from './framework.ts'
+import { createSearchCommand } from './commands/search.ts'
+import { registerCommand } from './registry.ts'
+
+registerCommand(createSearchCommand())
 
 export { parseCommandArguments, parseGlobalArguments } from './args.ts'
 export type {
