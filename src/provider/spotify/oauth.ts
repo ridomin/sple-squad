@@ -1,4 +1,5 @@
 import { AccessRestrictedError, AuthRequiredError, NotFoundError, ProviderError, RateLimitError } from '../../core/provider/errors.ts'
+import type { StoredToken } from '../../core/config/types.ts'
 import { parseRetryAfterMs } from '../http/backoff.ts'
 
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token'
@@ -11,6 +12,7 @@ const HTTP_TOO_MANY_REQUESTS = 429
 const HTTP_SERVER_ERROR = 500
 const EMPTY_LENGTH = 0
 const ZERO_SECONDS = 0
+const MILLISECONDS_PER_SECOND = 1000
 
 export interface SpotifyTokenResponse {
   accessToken: string
@@ -83,10 +85,24 @@ function parseTokenResponse (body: unknown): SpotifyTokenResponse {
   return token
 }
 
-async function tokenEndpointError (response: Response): Promise<Error> {
+async function tokenEndpointError (
+  response: Response,
+  grantType: 'authorization_code' | 'refresh_token'
+): Promise<Error> {
   const body = await readOptionalResponseJson(response)
   const code = isRecord(body) ? safeOAuthErrorCode(body.error) : undefined
   if (code === 'invalid_grant') {
+    return invalidGrantError(grantType)
+  }
+
+  function invalidGrantError (grantType: 'authorization_code' | 'refresh_token'): Error {
+    if (grantType === 'refresh_token') {
+      return new AuthRequiredError(
+        'revoked',
+        undefined,
+        'Spotify authorization expired or was revoked; run "sple auth login"'
+      )
+    }
     return new ProviderError('Spotify rejected the authorization code; run "sple auth login" again')
   }
   if (response.status === HTTP_UNAUTHORIZED || code === 'invalid_client' || code === 'unauthorized_client') {
@@ -129,11 +145,60 @@ export async function exchangeAuthorizationCode (
     body
   }, 'Spotify token endpoint request failed')
   if (!response.ok) {
-    throw await tokenEndpointError(response)
+    throw await tokenEndpointError(response, 'authorization_code')
   }
   const parsed = parseTokenResponse(await parseResponseJson(response, 'POST', '/api/token'))
   parsed.scopes ??= [...options.requestedScopes]
   return parsed
+}
+
+export interface RefreshSpotifyTokenOptions {
+  clientId: string
+  fetchImpl?: typeof fetch
+  now?: () => number
+}
+
+/** Refreshes a stored Spotify token without logging either credential. */
+export async function refreshSpotifyToken (
+  token: StoredToken,
+  options: RefreshSpotifyTokenOptions
+): Promise<StoredToken> {
+  if (token.refreshToken === undefined) {
+    throw new AuthRequiredError('token-expired')
+  }
+  const body = new URLSearchParams({
+    grant_type: 'refresh_token',
+    refresh_token: token.refreshToken,
+    client_id: options.clientId.trim()
+  })
+  const response = await request(
+    options.fetchImpl ?? fetch,
+    SPOTIFY_TOKEN_URL,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body
+    },
+    'Spotify token endpoint request failed'
+  )
+  if (!response.ok) {
+    throw await tokenEndpointError(response, 'refresh_token')
+  }
+
+  const refreshed = parseTokenResponse(await parseResponseJson(response, 'POST', '/api/token'))
+  const { expiresIn, refreshToken, scopes } = refreshed
+  const updated: StoredToken = {
+    ...token,
+    accessToken: refreshed.accessToken,
+    expiresAt: new Date((options.now ?? Date.now)() + expiresIn * MILLISECONDS_PER_SECOND).toISOString()
+  }
+  if (refreshToken !== undefined) {
+    updated.refreshToken = refreshToken
+  }
+  if (scopes !== undefined) {
+    updated.scopes = scopes
+  }
+  return updated
 }
 
 function premiumRequiredError (): AccessRestrictedError {
@@ -143,7 +208,7 @@ function premiumRequiredError (): AccessRestrictedError {
   )
 }
 
-function mapSpotifyApiError (status: number, body: unknown, retryAfterMs?: number): Error {
+export function mapSpotifyApiError (status: number, body: unknown, retryAfterMs?: number): Error {
   if (status === HTTP_UNAUTHORIZED) {
     return new AuthRequiredError('token-expired')
   }
