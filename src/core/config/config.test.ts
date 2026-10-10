@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
   resolveConfig,
+  parseEnvFile,
   loadConfigFromDisk,
   UsageError,
   ENV_VAR_SPOTIFY_CLIENT_ID,
@@ -84,37 +85,26 @@ describe('resolveConfig precedence (CLI-6: flag > process env > default)', () =>
 
 
 describe('loadConfigFromDisk', () => {
-  // `.env` is loaded with `process.loadEnvFile` (ADR 0004 Amendment 1),
-  // which always merges into the real `process.env` — these tests touch a
-  // few real vars and must clean them up so they don't leak between tests.
-  const touchedEnvVars: string[] = []
-  afterEach(() => {
-    for (const key of touchedEnvVars.splice(0, touchedEnvVars.length)) {
-      Reflect.deleteProperty(process.env, key)
-    }
-  })
-
   it('is not an error when the .env file is missing', async () => {
     const dir = await makeTempDir()
     const envFilePath = join(dir, '.env')
-    const { config, warnings } = await loadConfigFromDisk({ envFilePath })
+    const { config, warnings } = await loadConfigFromDisk({ envFilePath, processEnv: {} })
     assert.equal(config.defaultProvider, 'spotify')
     assert.deepEqual(warnings, [])
   })
 
-  it('loads values from a real .env file on disk into process.env', async () => {
+  it('loads values from a real .env file on disk into the selected environment', async () => {
     const dir = await makeTempDir()
     const envFilePath = join(dir, '.env')
     await writeFile(
       envFilePath,
-      '# config\nSPLE_SPOTIFY_CLIENT_ID=abc123\nSPLE_DEFAULT_PROVIDER=youtube-music\n',
+      '# config\n\nSPLE_SPOTIFY_CLIENT_ID="abc 123"\nSPLE_DEFAULT_PROVIDER=youtube-music\n',
       { mode: 0o600 }
     )
     await chmod(envFilePath, 0o600)
-    touchedEnvVars.push(ENV_VAR_SPOTIFY_CLIENT_ID, ENV_VAR_DEFAULT_PROVIDER)
 
-    const { config, warnings } = await loadConfigFromDisk({ envFilePath })
-    assert.equal(config.spotifyClientId, 'abc123')
+    const { config, warnings } = await loadConfigFromDisk({ envFilePath, processEnv: {} })
+    assert.equal(config.spotifyClientId, 'abc 123')
     assert.equal(config.defaultProvider, 'youtube-music')
     assert.deepEqual(warnings, [])
   })
@@ -124,22 +114,108 @@ describe('loadConfigFromDisk', () => {
     const envFilePath = join(dir, '.env')
     await writeFile(envFilePath, 'SPLE_DEFAULT_PROVIDER=spotify\n')
     await chmod(envFilePath, 0o644)
-    touchedEnvVars.push(ENV_VAR_DEFAULT_PROVIDER)
 
-    const { warnings } = await loadConfigFromDisk({ envFilePath })
+    const { warnings } = await loadConfigFromDisk({ envFilePath, processEnv: {} })
     assert.equal(warnings.length, 1)
     assert.match(warnings[0] ?? '', /is readable by other users/v)
   })
 
-  it('a process env value set before loading wins over the .env file (CLI-6)', async () => {
+  it('process environment wins over .env and the CLI flag wins over both (CLI-6)', async () => {
     const dir = await makeTempDir()
     const envFilePath = join(dir, '.env')
     await writeFile(envFilePath, 'SPLE_DEFAULT_PROVIDER=youtube-music\n', { mode: 0o600 })
     await chmod(envFilePath, 0o600)
-    process.env[ENV_VAR_DEFAULT_PROVIDER] = 'fake'
-    touchedEnvVars.push(ENV_VAR_DEFAULT_PROVIDER)
 
-    const { config } = await loadConfigFromDisk({ envFilePath })
-    assert.equal(config.defaultProvider, 'fake')
+    const { config: processEnvConfig } = await loadConfigFromDisk({
+      envFilePath,
+      processEnv: { [ENV_VAR_DEFAULT_PROVIDER]: 'fake' }
+    })
+    assert.equal(processEnvConfig.defaultProvider, 'fake')
+
+    const { config: cliConfig } = await loadConfigFromDisk({
+      cliProvider: 'spotify',
+      envFilePath,
+      processEnv: { [ENV_VAR_DEFAULT_PROVIDER]: 'fake' }
+    })
+    assert.equal(cliConfig.defaultProvider, 'spotify')
+  })
+
+  it('loads the file when process.loadEnvFile is unavailable', async () => {
+    const dir = await makeTempDir()
+    const envFilePath = join(dir, '.env')
+    await writeFile(envFilePath, 'SPLE_DEFAULT_PROVIDER=fake\n', { mode: 0o600 })
+    await chmod(envFilePath, 0o600)
+
+    const descriptor = Object.getOwnPropertyDescriptor(process, 'loadEnvFile')
+    Object.defineProperty(process, 'loadEnvFile', {
+      configurable: true,
+      value: undefined,
+      writable: true
+    })
+    try {
+      const { config, warnings } = await loadConfigFromDisk({ envFilePath, processEnv: {} })
+      assert.equal(config.defaultProvider, 'fake')
+      assert.deepEqual(warnings, [])
+    } finally {
+      if (descriptor === undefined) {
+        Reflect.deleteProperty(process, 'loadEnvFile')
+      } else {
+        Object.defineProperty(process, 'loadEnvFile', descriptor)
+      }
+    }
+  })
+
+  it('rejects malformed entries with a line-numbered error without exposing values', () => {
+    const contents = [
+      '# config',
+      'SPLE_DEFAULT_PROVIDER=spotify',
+      'BAD KEY=must-not-appear'
+    ].join('\n')
+
+    assert.throws(
+      () => parseEnvFile(contents),
+      (error: unknown) => {
+        assert.ok(error instanceof SyntaxError)
+        assert.match(error.message, /line 3/v)
+        assert.doesNotMatch(error.message, /must-not-appear/v)
+        return true
+      }
+    )
+  })
+
+  it('parses documented assignment, comment, empty, quoted, and spaced values', () => {
+    assert.deepEqual(parseEnvFile([
+      '# config comment',
+      '',
+      'PLAIN=value with spaces',
+      'EMPTY=',
+      'SINGLE=\' value with spaces \'',
+      'DOUBLE="value with spaces and = sign"',
+      'PADDED =  padded value  '
+    ].join('\n')), [
+      ['PLAIN', 'value with spaces'],
+      ['EMPTY', ''],
+      ['SINGLE', ' value with spaces '],
+      ['DOUBLE', 'value with spaces and = sign'],
+      ['PADDED', 'padded value']
+    ])
+  })
+
+  it('rejects malformed file contents instead of resolving with defaults', async () => {
+    const dir = await makeTempDir()
+    const envFilePath = join(dir, '.env')
+    await writeFile(envFilePath, 'SPLE_DEFAULT_PROVIDER="unterminated\n', { mode: 0o600 })
+    await chmod(envFilePath, 0o600)
+
+    const processEnv: NodeJS.ProcessEnv = {}
+    await assert.rejects(
+      loadConfigFromDisk({ envFilePath, processEnv }),
+      (error: unknown) => {
+        assert.ok(error instanceof SyntaxError)
+        assert.match(error.message, /line 1/v)
+        return true
+      }
+    )
+    assert.deepEqual(processEnv, {})
   })
 })

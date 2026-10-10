@@ -116,7 +116,7 @@ Tokens are stored in a versioned JSON file alongside `.env`:
 
 Both modules handle schema versioning and migration (if tokens.json is v0 or v1, ensure it's upgraded to v1).
 
-**Environment variable loading** — The CLI loads `<configDir>/.env` once at startup, before parsing arguments, with Node's `process.loadEnvFile` (Node 20.13+). A missing file is not an error. A file that cannot be parsed prints `Failed to load .env: <reason>` to stderr and the CLI continues without it. Ports use any dotenv parser that supports the subset in Amendment 1.
+**Environment variable loading** — The CLI loads `<configDir>/.env` once at startup, before parsing arguments, with the config module's parser so loading works across the declared Node `>=20.0.0` range. A missing file is not an error. Malformed entries fail with a line-numbered error; they are not silently ignored.
 
 ### 4. HTTP client integration (from ADR-0003)
 

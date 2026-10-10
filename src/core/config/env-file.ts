@@ -1,7 +1,6 @@
 // Permission checks for the `.env` config file (ADR 0004 §1 and Amendment
-// 1). sple never writes `.env`. Parsing/loading is delegated to Node's
-// built-in `process.loadEnvFile` (see `config.ts`) rather than a hand-rolled
-// parser — this module only validates the file's POSIX permissions.
+// 1). sple never writes `.env`. Parsing/loading is handled in `config.ts`;
+// this module only validates the file's POSIX permissions.
 import { constants as fsConstants } from 'node:fs'
 import { stat } from 'node:fs/promises'
 

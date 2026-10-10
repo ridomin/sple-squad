@@ -1,10 +1,8 @@
 // Config precedence resolution (ADR 0004 §1, CLI-6): flags > process
-// environment > `.env` file > built-in defaults. `.env` loading is done with
-// Node's built-in `process.loadEnvFile` (ADR 0004 Amendment 1) — it merges
-// the file into `process.env` without overriding already-set variables, so
-// by the time `resolveConfig` runs, `process.env` already reflects the full
-// precedence. See `loadConfigFromDisk` below for the thin I/O wrapper, and
-// `env-file.ts` for the `.env` permission check.
+// environment > `.env` file > built-in defaults. `loadConfigFromDisk` merges
+// `.env` values into `process.env` without overriding already-set variables.
+// See `env-file.ts` for the `.env` permission check.
+import { readFile } from 'node:fs/promises'
 import { getConfigFilePath, type PlatformEnv } from './paths.ts'
 import { checkEnvFilePermissions } from './env-file.ts'
 import type { ProviderId } from './types.ts'
@@ -46,7 +44,7 @@ export interface ResolveConfigOptions {
   cliProvider?: string
   // Defaults to `process.env`; override in tests to avoid reading/mutating
   // globals. Expected to already contain any `.env` values merged in by
-  // `process.loadEnvFile` (see `loadConfigFromDisk`).
+  // `loadConfigFromDisk`.
   processEnv?: NodeJS.ProcessEnv
 }
 
@@ -82,7 +80,7 @@ function resolveRequestedProvider (
 
 // Merges config sources per CLI-6 precedence: CLI flag > process env >
 // default. (The `.env` file is folded into `processEnv` beforehand by
-// `loadConfigFromDisk`/`process.loadEnvFile`.) Empty/whitespace-only values
+// `loadConfigFromDisk`.) Empty/whitespace-only values
 // count as unset (ADR 0004 §1).
 export function resolveConfig (options: ResolveConfigOptions = {}): SpleConfig {
   const { cliProvider, processEnv = process.env } = options
@@ -120,47 +118,114 @@ function isErrnoException (err: unknown): err is NodeJS.ErrnoException {
   return err instanceof Error && 'code' in err
 }
 
-// Loads `<configDir>/.env` into `process.env` (if present) with Node's
-// built-in `process.loadEnvFile` — it never overrides a variable that's
-// already set, which is exactly the CLI-6 "process env > .env file"
-// precedence. A missing file is not an error (ADR 0004 §3).
-async function loadEnvFileVars (envFilePath: string): Promise<string[]> {
-  const warnings: string[] = []
-  try {
-    process.loadEnvFile(envFilePath)
-    const permissionWarning = await checkEnvFilePermissions(envFilePath)
-    if (permissionWarning !== null) {
-      warnings.push(permissionWarning)
+const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/v
+const ENV_LINE_SEPARATOR = /\r?\n/v
+const MINIMUM_SEPARATOR_INDEX = 1
+const FIRST_LINE_NUMBER = 1
+const FIRST_CHARACTER_AFTER_QUOTE = 1
+const QUOTED_VALUE_MINIMUM_LENGTH = 2
+
+function envSyntaxError (message: string, lineNumber: number): never {
+  throw new SyntaxError(`${message} on line ${lineNumber}`)
+}
+
+function parseEnvValue (value: string, lineNumber: number): string {
+  const trimmedValue = value.trim()
+  const startsWithQuote = trimmedValue.startsWith('"') || trimmedValue.startsWith("'")
+  const endsWithQuote = trimmedValue.endsWith('"') || trimmedValue.endsWith("'")
+  if (startsWithQuote) {
+    if (
+      trimmedValue.length < QUOTED_VALUE_MINIMUM_LENGTH ||
+      !trimmedValue.endsWith(trimmedValue.charAt(EMPTY_LENGTH))
+    ) {
+      envSyntaxError('Unclosed quote in .env entry', lineNumber)
     }
-  } catch (err) {
+    return trimmedValue.slice(FIRST_CHARACTER_AFTER_QUOTE, -FIRST_CHARACTER_AFTER_QUOTE)
+  }
+  if (endsWithQuote) {
+    envSyntaxError('Unclosed quote in .env entry', lineNumber)
+  }
+  return trimmedValue
+}
+
+function parseEnvLine (rawLine: string, lineNumber: number): [string, string] | null {
+  const line = rawLine.trim()
+  if (line.length === EMPTY_LENGTH || line.startsWith('#')) return null
+
+  const separatorIndex = line.indexOf('=')
+  if (separatorIndex < MINIMUM_SEPARATOR_INDEX) {
+    envSyntaxError('Invalid .env entry', lineNumber)
+  }
+
+  const key = line.slice(EMPTY_LENGTH, separatorIndex).trim()
+  if (!ENV_KEY_PATTERN.test(key)) {
+    envSyntaxError('Invalid .env variable name', lineNumber)
+  }
+
+  const value = parseEnvValue(line.slice(separatorIndex + MINIMUM_SEPARATOR_INDEX), lineNumber)
+  return [key, value]
+}
+
+export function parseEnvFile (contents: string): Array<[string, string]> {
+  const variables: Array<[string, string]> = []
+  for (const [index, rawLine] of contents.split(ENV_LINE_SEPARATOR).entries()) {
+    const variable = parseEnvLine(rawLine, index + FIRST_LINE_NUMBER)
+    if (variable !== null) variables.push(variable)
+  }
+  return variables
+}
+
+// Loads the supported .env syntax into the supplied environment without
+// overriding variables already set there. Parsing the file ourselves keeps
+// loading available across the declared Node >=20 range.
+async function loadEnvFileVars (
+  envFilePath: string,
+  environment: NodeJS.ProcessEnv
+): Promise<string[]> {
+  const warnings: string[] = []
+  const contents = await readFile(envFilePath, 'utf8').catch((err: unknown): null => {
     if (isErrnoException(err) && err.code === 'ENOENT') {
       // Missing file is not an error (ADR 0004 §3).
-      return warnings
+      return null
     }
     const reason = err instanceof Error ? err.message : String(err)
     warnings.push(`Failed to load .env: ${reason}`)
+    return null
+  })
+  if (contents === null) return warnings
+
+  const variables = parseEnvFile(contents)
+  const missingVariables = new Map<string, string>()
+  for (const [key, value] of variables) {
+    if (environment[key] === undefined && !missingVariables.has(key)) {
+      missingVariables.set(key, value)
+    }
+  }
+  Object.assign(environment, Object.fromEntries(missingVariables))
+  const permissionWarning = await checkEnvFilePermissions(envFilePath)
+  if (permissionWarning !== null) {
+    warnings.push(permissionWarning)
   }
   return warnings
 }
 
-// Loads `<configDir>/.env` (if present) into `process.env`, then resolves
-// the final config per CLI-6 precedence. A missing file is not an error. A
-// file that cannot be loaded produces a warning and the CLI continues
+// Loads `<configDir>/.env` (if present) into the selected environment, then
+// resolves the final config per CLI-6 precedence. A missing file is not an
+// error. A file that cannot be read produces a warning and the CLI continues
 // without it (ADR 0004 §3).
 export async function loadConfigFromDisk (
   options: LoadConfigFromDiskOptions = {}
 ): Promise<LoadConfigResult> {
   const { cliProvider, processEnv, envFilePath, platformEnv } = options
   const resolvedEnvFilePath = envFilePath ?? getConfigFilePath(ENV_FILE_NAME, platformEnv)
-  const warnings = await loadEnvFileVars(resolvedEnvFilePath)
+  const environment = processEnv ?? process.env
+  const warnings = await loadEnvFileVars(resolvedEnvFilePath, environment)
 
   const resolveOptions: ResolveConfigOptions = {}
   if (cliProvider !== undefined) {
     resolveOptions.cliProvider = cliProvider
   }
-  if (processEnv !== undefined) {
-    resolveOptions.processEnv = processEnv
-  }
+  resolveOptions.processEnv = environment
 
   return { config: resolveConfig(resolveOptions), warnings }
 }
