@@ -14,36 +14,39 @@ Before spawning an agent, determine which model to use. Check these layers in or
 
 **Layer 2 — Charter Preference:** Does the agent's charter have a `## Model` section with `Preferred` set to a specific model (not `auto`)? If yes, use that model.
 
-**Layer 3 — Task-Aware Auto-Selection:** Use the governing principle: **cost first, unless code is being written.** Match the agent's task to determine output type, then select accordingly:
+**Layer 3 — Task-Aware Auto-Selection:** Use the governing principle: **choose the least costly model that can reliably do the work.** First decide whether the task is executing a settled plan/specification or still requires design, ambiguity resolution, or difficult judgment; then select by task:
 
 | Task Output | Model | Tier | Rule |
 |-------------|-------|------|------|
-| Writing code (implementation, refactoring, test code, bug fixes) | `gpt-5.6-terra` | Standard | Quality and accuracy matter for code. Use standard tier. |
-| Writing prompts or agent designs (structured text that functions like code) | `gpt-5.6-terra` | Standard | Prompts are executable — treat like code. |
-| NOT writing code (docs, planning, triage, logs, changelogs, mechanical ops) | `gpt-5.6-luna` | Fast | Cost first. Luna handles non-code tasks. |
+| Settled, bounded implementation, test-writing, or routine fix following an approved plan/spec and established patterns | `gpt-5.6-luna` | Fast | Use the cost-efficient path when scope and expected behavior are clear, risk is low, and the change is straightforward. Code output alone does not require standard tier. |
+| Implementation or tests requiring novel logic, unresolved requirements, substantial refactoring, or difficult technical judgment | `gpt-5.6-terra` | Standard | Use a stronger model when the work must reason through complexity or uncertainty rather than execute a settled design. |
+| Large, complex implementation from a settled specification | `gpt-5.3-codex` | Standard specialist | Use for heavy code generation or large multi-file work; do not select solely because code is being written. |
+| Straightforward non-code work (docs, routine planning, triage, logs, changelogs, mechanical ops) | `gpt-5.6-luna` | Fast | Cost first for work that does not need sustained complex reasoning. |
+| Writing prompts or agent designs that still require design or careful behavioral reasoning | `gpt-5.6-terra` | Standard | Treat executable instructions like code when creating or redesigning them; routine edits to settled instructions can use Fast. |
 | Visual/design work requiring image analysis | `gpt-5.6-sol` | Premium | Vision capability required. Overrides cost rule. |
 
-**Role-to-model mapping** (applying cost-first principle):
+**Role-to-model mapping** (for the current roster; task-aware rules above take precedence):
 
 | Role | Default Model | Why | Override When |
 |------|--------------|-----|---------------|
-| Core Dev / Backend / Frontend | `gpt-5.6-terra` | Writes code — quality first | Heavy code gen → `gpt-5.3-codex` |
-| Tester / QA | `gpt-5.6-terra` | Writes test code — quality first | Simple test scaffolding → `claude-haiku-4.5` |
-| Lead / Architect | auto (per-task) | Mixed: code review needs quality, planning needs cost | Architecture proposals → premium; triage/planning → haiku |
-| Prompt Engineer | auto (per-task) | Mixed: prompt design is like code, research is not | Prompt architecture → sonnet; research/analysis → haiku |
-| Copilot SDK Expert | `gpt-5.6-terra` | Technical analysis that often touches code | Pure research → `gpt-5.6-luna` |
-| Designer / Visual | `gpt-5.6-sol` | Vision-capable model required | — (never downgrade — vision is non-negotiable) |
-| DevRel / Writer | `gpt-5.6-luna` | Docs and writing — not code | — |
-| Scribe / Logger | `gpt-5.6-luna` | Mechanical file ops — cheapest possible | — (never bump Scribe) |
-| Git / Release | `gpt-5.6-luna` | Mechanical ops — changelogs, tags, version bumps | — (never bump mechanical ops) |
+| Lead | auto (per-task) | Mixes coordination, planning, and reviews | Settled planning/triage → Fast; architecture, unresolved requirements, or high-stakes review → Standard or Premium as indicated below |
+| Core Dev | auto (per-task) | Implements core/CLI work; follows the same cost-aware code rule | Settled, bounded implementation → Fast; ambiguous or complex implementation → Standard; large code generation → `gpt-5.3-codex` |
+| Provider Dev | auto (per-task) | Implements provider integrations, where OAuth, HTTP, or quota behavior can affect risk | Settled adapter work with established patterns → Fast; uncertain integration behavior or difficult debugging → Standard; security-sensitive work → Premium |
+| Tester | auto (per-task) | Covers tests and fixtures; effort ranges from routine cases to subtle contract reasoning | Tests from settled requirements and known patterns → Fast; ambiguous contracts or complex test design → Standard |
+| Scribe | `gpt-5.6-luna` | Decision merging and other mechanical record-keeping | Keep routine work Fast; use a stronger model only if explicitly assigned substantive analysis instead of its normal role |
+| Ralph | `gpt-5.6-luna` | Routine monitoring, status checks, and evidence reporting | Use Standard only when a requested investigation requires substantial synthesis or judgment |
+| Rai | auto (per-task) | RAI review can range from bounded checklist work to consequential risk judgment | Routine, low-risk checks → Fast; substantial or high-impact RAI judgment/reviewer gate → Premium |
+| Fact Checker | auto (per-task) | Verification ranges from checking clear claims to evaluating disputed or complex evidence | Clear, bounded verification → Fast; conflicting evidence or difficult judgment → Standard; high-risk reviewer gate → Premium |
+| @copilot | auto (per-task) | Coding-agent work ranges from small specified fixes to broader features | Clear, isolated work → Fast; ambiguous, high-risk, or complex work → Standard or Premium as indicated below |
 
-**Task complexity adjustments** (apply at most ONE — no cascading):
-- **Bump UP to premium:** architecture proposals, reviewer gates, security audits, multi-agent coordination (output feeds 3+ agents)
-- **Bump DOWN to fast/cheap:** typo fixes, renames, boilerplate, scaffolding, changelogs, version bumps
-- **Switch to code specialist (`gpt-5.3-codex`):** large multi-file refactors, complex implementation from spec, heavy code generation (500+ lines)
-- **Switch to analytical diversity (`gemini-3.1-pro`):** code reviews where a second perspective helps, security reviews, architecture reviews after a rejection
+**Task complexity adjustments** (apply the single best fit; do not cascade):
+- **Use Fast (`gpt-5.6-luna`) for settled execution:** bounded implementation or tests, boilerplate, scaffolding, routine fixes, typo fixes, renames, changelogs, and version bumps when the plan/spec is settled, patterns are established, and risk is low.
+- **Use Standard (`gpt-5.6-terra`) when judgment is needed:** unresolved requirements, design choices, novel logic, complex debugging, substantial refactoring, or nontrivial technical analysis.
+- **Bump UP to Premium:** architecture proposals, consequential reviewer gates, security audits, or multi-agent coordination whose output feeds 3+ agents. Do not bump routine execution merely because it is code.
+- **Switch to code specialist (`gpt-5.3-codex`):** large multi-file refactors or heavy code generation (about 500+ lines), including complex implementation from a settled spec.
+- **Switch to analytical diversity (`gemini-3.1-pro`):** code reviews where a second perspective helps, security reviews, or architecture reviews after a rejection.
 
-**Layer 4 — Default:** If nothing else matched, use `gpt-5.6-luna`. Cost wins when in doubt, unless code is being produced.
+**Layer 4 — Default:** If nothing else matched, use `gpt-5.6-luna`. If the uncertainty is specifically about unresolved requirements or difficult technical judgment, use Standard; reserve Premium for the cases above.
 
 **Fallback chains — when a model is unavailable:**
 
