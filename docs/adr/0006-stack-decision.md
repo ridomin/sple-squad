@@ -16,7 +16,7 @@ This ADR documents the stack as it actually landed after that review cycle, not 
 
 ### 1. Runtime: Node.js, active LTS
 
-- Node.js, targeting the **active LTS** release line (CI pins `node-version: lts/*`; `package.json` declares `"engines": { "node": ">=20.0.0" }`).
+- Node.js, targeting the **active LTS** release line (CI pins `node-version: lts/*`; `package.json` declares `"engines": { "node": ">=24.0.0" }`).
 - Rationale: NFR-1 mandates "Node.js active LTS" directly. Active LTS gives a stable, security-patched runtime without chasing current/experimental releases, while still being new enough for `node:test`'s native TypeScript type-stripping (stable by default since Node 24) to run test files without a separate transpile step.
 - No standalone binaries (`pkg`, `nexe`, etc.) — NFR-1 explicitly excludes them; distribution is npm-only (§2).
 

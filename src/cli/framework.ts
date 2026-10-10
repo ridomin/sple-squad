@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import type { Readable, Writable } from 'node:stream'
-import { loadConfigFromDisk } from '../core/config/config.ts'
+import { resolveConfig } from '../core/config/config.ts'
 import {
   parseCommandArguments,
   parseGlobalArguments,
@@ -41,7 +41,6 @@ export interface CliIO {
 export interface RunCliOptions {
   commands?: readonly CommandDefinition[]
   io?: CliIO
-  envFilePath?: string
   processEnv?: NodeJS.ProcessEnv
 }
 
@@ -132,8 +131,7 @@ async function executeCommand (
   if (command === null) return EXIT_CODES.success
   const outputMode = selectOutputMode(global.json, global.quiet, io.stdoutIsTTY)
   const configOptions = getConfigOptions(global, options)
-  const { config, warnings } = await loadConfigFromDisk(configOptions)
-  for (const warning of warnings) writeCliMessage(io.stderr, warning, 'warning')
+  const config = resolveConfig(configOptions)
 
   const parsed = parseCommandArguments(command, commandArgs)
   const context: CommandContext = {
@@ -163,18 +161,15 @@ function getConfigOptions (
   options: RunCliOptions
 ): {
   cliProvider?: string
-  envFilePath?: string
   processEnv?: NodeJS.ProcessEnv
 } {
   const configOptions: {
     cliProvider?: string
-    envFilePath?: string
     processEnv?: NodeJS.ProcessEnv
   } = {}
   const { provider } = global
-  const { envFilePath, processEnv } = options
+  const { processEnv } = options
   if (provider !== undefined) configOptions.cliProvider = provider
-  if (envFilePath !== undefined) configOptions.envFilePath = envFilePath
   if (processEnv !== undefined) configOptions.processEnv = processEnv
   return configOptions
 }

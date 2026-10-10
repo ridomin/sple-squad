@@ -83,8 +83,7 @@ describe('CLI framework contract', () => {
     ], {
       commands: [sampleCommand],
       io,
-      processEnv: { SPLE_DEFAULT_PROVIDER: 'fake' },
-      envFilePath: '.sple-framework-no-env'
+      processEnv: { SPLE_DEFAULT_PROVIDER: 'fake' }
     })
     assert.equal(exitCode, EXIT_CODES.success)
     assert.deepEqual(JSON.parse(io.stdout.text), {
@@ -100,8 +99,7 @@ describe('CLI framework contract', () => {
     assert.equal(await run(['playlist', 'list', '--json'], {
       commands: [sampleCommand],
       io,
-      processEnv: { SPLE_DEFAULT_PROVIDER: 'youtube-music' },
-      envFilePath: '.sple-framework-no-env'
+      processEnv: { SPLE_DEFAULT_PROVIDER: 'youtube-music' }
     }), EXIT_CODES.success)
     assert.deepEqual(JSON.parse(io.stdout.text), {
       provider: 'youtube-music',
@@ -135,8 +133,7 @@ describe('CLI framework contract', () => {
     assert.equal(await run(['playlist', 'list', '--json'], {
       commands: [command],
       io,
-      processEnv: {},
-      envFilePath: '.sple-framework-no-env'
+      processEnv: {}
     }), EXIT_CODES.authRequired)
     const lines = io.stderr.text.trimEnd().split('\n')
     assert.equal(lines[0], 'sple: Authentication required. Run "sple auth login" to log in.')

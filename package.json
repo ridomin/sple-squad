@@ -5,7 +5,7 @@
   "description": "Command-line tool for managing music-streaming playlists (Spotify first, provider-extensible).",
   "type": "module",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   },
   "bin": {
     "sple": "dist/cli/index.js"

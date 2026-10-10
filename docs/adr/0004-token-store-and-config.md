@@ -1,6 +1,6 @@
 # ADR 0004: Token store and config
 
-- **Status:** Accepted (2026-10-01); amended 2026-10-07 (Amendment 1)
+- **Status:** Accepted (2026-10-01); amended 2026-10-07 (Amendment 1) and 2026-10-10 (Amendment 2)
 - **Date:** 2026-10-01
 - **Deciders:** project owner (user); architect (author)
 - **Related:** `docs/requirements.md` FR-AUTH-1, FR-AUTH-2, FR-AUTH-3, FR-AUTH-4, FR-AUTH-6, CLI-5, CLI-6, NFR-2, NFR-3; ADR 0003 (Provider interface); ADR 0002 (YouTube Music auth)
@@ -26,7 +26,7 @@ Configuration is stored in a single `.env` file in the user's platform-specific 
 - **Windows:** `%APPDATA%\sple\.env` (typically `C:\Users\<user>\AppData\Roaming\sple\.env`)
 - **Fallback:** `~/.sple/.env` on Windows when `APPDATA` is unset, and on any other platform. macOS does not read `XDG_CONFIG_HOME`.
 
-The `.env` file uses environment variable syntax (`KEY=value`). The file is loaded once at CLI startup by the config module.
+The `.env` file uses Node's environment-file syntax (`KEY=value`). The application does not read or parse it. To use it, launch Node with `--env-file` (or `--env-file-if-exists` when the file is optional) and the canonical path above; Node populates `process.env` before the application starts.
 
 **Variables:**
 
@@ -42,9 +42,17 @@ Values are trimmed; an empty value counts as unset.
 
 Comments and empty lines are allowed in the .env file. Tokens are **never** stored here; they live in `tokens.json` (see below).
 
-**Precedence (CLI-6):** flags > process environment > `.env` file > defaults. A variable already set in the process environment is never overwritten by the file. Only `--provider` has a flag today; client IDs and the secret come from the environment or the file.
+**Precedence (CLI-6):** flags > `process.env` > defaults. Values loaded by Node from `.env` are part of `process.env`; Node's environment-file behavior governs any collisions between the host environment and file entries. Only `--provider` has a flag today; client IDs and the secret come from the environment.
 
-**Missing client configuration:** a command that needs a provider whose client ID is not set fails with `UsageError` (exit 2): `Missing <Provider> client ID. Set <VAR> in your environment or .env file.` `auth status` and `auth logout` still work for such a provider from `tokens.json` alone (logout then deletes local tokens and warns that access was not revoked).
+**Missing client configuration:** a command that needs a provider whose client ID is not set fails with `UsageError` (exit 2): `Missing <Provider> client ID. Set <VAR> in your environment or load it from the config .env file with Node's --env-file option.` `auth status` and `auth logout` still work for such a provider from `tokens.json` alone (logout then deletes local tokens and warns that access was not revoked).
+
+**Launching with `.env`:** the config file's location is platform-specific as listed above; Node does not infer that path. For example, on Linux:
+
+```sh
+node --env-file-if-exists="${XDG_CONFIG_HOME:-$HOME/.config}/sple/.env" dist/cli/index.js playlist list
+```
+
+Use the corresponding macOS or Windows path from the list above. `node --env-file="<path>" ...` can be used when the file is known to exist. `npm start`, `npx sple`, and the installed `sple` bin entry do not implicitly add a Node `--env-file` flag; they use the environment they are given. For an installed package, launch its JavaScript entry point through `node --env-file="<canonical path>" <entry-point> ...`, or export the variables in the environment before invoking the bin.
 
 ### 2. Token file: tokens.json in the user's config directory
 
@@ -116,7 +124,7 @@ Tokens are stored in a versioned JSON file alongside `.env`:
 
 Both modules handle schema versioning and migration (if tokens.json is v0 or v1, ensure it's upgraded to v1).
 
-**Environment variable loading** — The CLI loads `<configDir>/.env` once at startup, before parsing arguments, with the config module's parser so loading works across the declared Node `>=20.0.0` range. A missing file is not an error. Malformed entries fail with a line-numbered error; they are not silently ignored.
+**Environment variable loading** — The host Node process loads `<configDir>/.env` before application startup when explicitly launched with `--env-file` (Node `>=24.0.0`). Application config resolution reads only `process.env`; it does not access the `.env` file. Use `--env-file-if-exists` if the file may be absent. Node's syntax and duplicate-key behavior apply; the application adds no parser or file-permission warning.
 
 ### 4. HTTP client integration (from ADR-0003)
 
@@ -176,18 +184,11 @@ Token refresh is transparent to the `Provider` interface and CLI.
 
 | Change | Why |
 |---|---|
-| `.env` is loaded by the CLI at startup (`process.loadEnvFile`), not with `node --env-file` | `npx sple` and the `bin` entry cannot pass Node flags. Process environment wins over the file. |
+| The host Node process must be launched with `--env-file` and the canonical config path to load `.env` | npm scripts and the package bin do not implicitly supply the flag. Keeping parsing with Node avoids divergent syntax and duplicate-key behavior in application code. |
 | Fallback config directory `~/.sple` | Implemented for Windows without `APPDATA` and unknown platforms. |
 | New variable `SPLE_ENABLE_FAKE_PROVIDER` | ADR 0003 Amendment 2. |
 | `StoredToken.displayName?: string` | Added in ADR 0003 Amendment 1 (M1-7); listed here so the token schema is in one place. |
 | Token refresh moved to ADR 0010 | §4's sketch is replaced by the exact retry, refresh and persistence rules. |
-
-### `.env` syntax (subset ports must accept)
-
-- One `KEY=value` per line; blank lines and lines starting with `#` are ignored.
-- The value may be wrapped in single or double quotes, which are removed.
-- No variable expansion, no multi-line values.
-- **Permissions:** `sple` never writes `.env`. On POSIX, after loading it, the CLI checks its mode; if any group or other bit is set it prints `Warning: <path> is readable by other users. Run: chmod 600 "<path>"` to stderr and continues.
 
 ### `tokens.json` rules
 
@@ -197,3 +198,11 @@ Token refresh is transparent to the `Provider` interface and CLI.
 - **Write:** create the config directory if needed, read the current file (or start a new v1 document), replace `accounts[0]` for the provider, and write the whole file as UTF-8 JSON with 2-space indentation. On POSIX the file must be created with mode `0600` (never readable by others, even briefly): write a temp file in the same directory with mode `0600`, then rename it over `tokens.json`. Delete rewrites the file the same way.
 - **Delete (logout):** remove the provider's entry entirely; other providers are untouched. A missing file is not an error.
 - Concurrent writers are not locked against; the last write wins.
+
+## Amendment 2 (Node-owned environment-file loading)
+
+- **Date:** 2026-10-10
+- **Why:** the application-owned `.env` parser had syntax and duplicate-key behavior that diverged from Node. The project now requires Node `>=24.0.0`, and the user chose Node's built-in environment-file loader as the single source of `.env` parsing behavior.
+- **Decision:** `sple` does not read, parse, or check permissions on `.env`, and does not call `process.loadEnvFile`. A host process that wants config-file values must invoke Node with `--env-file=<canonical config path>`. CLI config resolution is strictly `--provider` flag > `process.env` > built-in defaults. `.env` values loaded by Node are ordinary process environment values.
+- **Invocation gap:** an npm script, `npx sple`, or the package `bin` entry does not implicitly receive a Node CLI flag. To load the canonical file, invoke the JavaScript entry point with Node directly as shown above, or export the values before calling the script. `build`, `dev` (the TypeScript watch compiler), `lint`, and `test` do not implicitly load the config `.env`.
+- **Permissions:** `sple` neither writes nor checks `.env` permissions. On POSIX, users should restrict the file themselves (for example, `chmod 600 "<path>"`). The `tokens.json` path and its user-only permission enforcement remain unchanged.
