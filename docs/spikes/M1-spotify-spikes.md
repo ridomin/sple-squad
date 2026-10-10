@@ -4,7 +4,9 @@
 requests were made for this report. Prior statements in the requirements and
 ADRs are recorded below as prior claims, not as evidence reproduced in this
 verification cycle. No requirements or ADR changes are warranted without
-contradictory observed evidence. Rido's human sign-off remains pending.
+contradictory observed evidence. Rido has reviewed and signed off on this
+report as written; that sign-off does not verify S1–S4 or approve the M1
+implementation.
 
 ## Evidence boundary
 
@@ -96,5 +98,6 @@ text, or response body.
 
 ## Sign-off
 
-Rido's review and sign-off are still pending. These unverified checks must not
-be treated as reproduced evidence or as sign-off for M1 work.
+Rido's review and sign-off on this report are complete. These unverified
+checks must not be treated as reproduced evidence or as approval of the M1
+implementation.
