@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile, rename, chmod } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { getConfigFilePath, type PlatformEnv } from './paths.ts'
 import { TOKENS_SCHEMA_VERSION, type ProviderId, type StoredToken, type TokensFile } from './types.ts'
+import { registerSensitiveValue } from '../security/secrets.ts'
 
 const TOKENS_FILE_NAME = 'tokens.json'
 const FILE_MODE_OWNER_RW = 0o600
@@ -115,6 +116,11 @@ async function writeTokensFileAtomic (filePath: string, data: TokensFile): Promi
 
 const FIRST_ACCOUNT_INDEX = 0
 
+function registerTokenSecrets (token: StoredToken): void {
+  registerSensitiveValue(token.accessToken)
+  registerSensitiveValue(token.refreshToken)
+}
+
 // Loads the stored token for a provider. Returns null if tokens.json is
 // missing, the provider has no entry, or its `accounts` array is empty
 // (Amendment 1: all three mean "not logged in").
@@ -132,6 +138,7 @@ export async function loadTokens (
   if (!isStoredToken(token)) {
     throw new Error(`Invalid stored token for provider "${providerId}" in ${filePath}`)
   }
+  registerTokenSecrets(token)
   return token
 }
 
@@ -146,6 +153,7 @@ export async function saveTokens (
   if (!isStoredToken(token)) {
     throw new Error(`Refusing to save invalid token for provider "${providerId}"`)
   }
+  registerTokenSecrets(token)
 
   const filePath = resolveFilePath(options)
   const file = await readTokensFile(filePath)
@@ -153,6 +161,7 @@ export async function saveTokens (
     ...file.providers,
     [providerId]: { accounts: [token] }
   }
+
   await writeTokensFileAtomic(filePath, { schemaVersion: TOKENS_SCHEMA_VERSION, providers })
 }
 

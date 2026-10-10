@@ -8,6 +8,7 @@
 import { getConfigFilePath, type PlatformEnv } from './paths.ts'
 import { checkEnvFilePermissions } from './env-file.ts'
 import type { ProviderId } from './types.ts'
+import { registerSensitiveValue } from '../security/secrets.ts'
 
 const DEFAULT_PROVIDER: ProviderId = 'spotify'
 const VALID_PROVIDER_IDS: readonly ProviderId[] = ['spotify', 'youtube-music', 'fake']
@@ -86,14 +87,17 @@ function resolveRequestedProvider (
 export function resolveConfig (options: ResolveConfigOptions = {}): SpleConfig {
   const { cliProvider, processEnv = process.env } = options
   const pick = (key: string): string | undefined => pickEnvValue(key, processEnv)
-
-  return {
+  const config: SpleConfig = {
     defaultProvider: resolveRequestedProvider(cliProvider, processEnv),
     spotifyClientId: pick(ENV_VAR_SPOTIFY_CLIENT_ID) ?? null,
     youtubeMusicClientId: pick(ENV_VAR_YOUTUBE_MUSIC_CLIENT_ID) ?? null,
     googleClientSecret: pick(ENV_VAR_GOOGLE_CLIENT_SECRET) ?? null,
     enableFakeProvider: pick(ENV_VAR_ENABLE_FAKE_PROVIDER) === FAKE_PROVIDER_ENABLED_VALUE
   }
+  registerSensitiveValue(config.spotifyClientId)
+  registerSensitiveValue(config.youtubeMusicClientId)
+  registerSensitiveValue(config.googleClientSecret)
+  return config
 }
 
 export interface LoadConfigFromDiskOptions {
