@@ -344,6 +344,22 @@ describe('fake provider: searchTracks and populatePlaylist (ADR-0003 Amendment 2
     assert.equal(tracks.items.length, 3)
   })
 
+  it('reports a failed item and continues adding later items in the batch', async () => {
+    const provider = createFakeProvider({ fixtures: freshFixtures() })
+
+    const result = await provider.populatePlaylist(
+      '1',
+      ['fake:track:3', 'not-a-ref', 'fake:track:1'],
+      { skipExisting: false }
+    )
+
+    assert.deepEqual(result.added, ['fake:track:3', 'fake:track:1'])
+    assert.deepEqual(result.failed, [{ ref: 'not-a-ref', error: 'Unknown fake track ref: not-a-ref' }])
+    const tracks = await provider.getPlaylistTracks('1', { limit: 10 })
+    assert.deepEqual(tracks.items.map((track) => track.refs.fake), ['fake:track:1', 'fake:track:2', 'fake:track:3', 'fake:track:1'])
+    assert.equal(tracks.total, 4)
+  })
+
   it('populatePlaylist skips already-added refs when skipExisting is true', async () => {
     const provider = createFakeProvider({ fixtures: freshFixtures() })
     await provider.populatePlaylist('1', ['fake:track:3'], { skipExisting: true })
