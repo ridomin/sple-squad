@@ -69,3 +69,4 @@ export {
   ExportFormatError
 } from './export/invariants.ts'
 export type { PlaylistFileCheckResult } from './export/invariants.ts'
+export * from './matching/index.ts'
