@@ -51,7 +51,7 @@ interface AuthorizationCodeOptions {
   context: AuthorizationContext
   state: string
   dependencies: SpotifyLoginDependencies
-  report: (message: string) => void
+  report: (message: string) => void | Promise<void>
 }
 
 interface CompleteAuthorizationOptions {
@@ -162,7 +162,7 @@ async function waitForLoopbackCode (
 async function authorizationCode (options: AuthorizationCodeOptions): Promise<string> {
   const { mode, context, state, dependencies, report } = options
   if (mode === 'manual') {
-    report('After authorizing, paste the redirected URL here:')
+    await report('After authorizing, paste the redirected URL here:')
     return parseManualRedirect(await (dependencies.readLine ?? readStdinLine)(), state)
   }
 
@@ -170,10 +170,10 @@ async function authorizationCode (options: AuthorizationCodeOptions): Promise<st
     try {
       await (dependencies.openBrowser ?? openSystemBrowser)(context.authorizationUrl)
     } catch {
-      report('Warning: Could not open a browser. Open the authorization URL manually.')
+      await report('Warning: Could not open a browser. Open the authorization URL manually.')
     }
   }
-  report('Waiting for authorization...')
+  await report('Waiting for authorization...')
   if (context.listener === undefined) {
     throw new ProviderError('Spotify authorization listener was not initialized')
   }
@@ -244,8 +244,8 @@ async function completeAuthorization (completion: CompleteAuthorizationOptions):
 async function runAuthorization (runOptions: RunAuthorizationOptions): Promise<SpotifyLoginResult> {
   const { options, context, verifier, state, scopes, dependencies } = runOptions
   const report = dependencies.writeStderr ?? defaultWriteStderr
-  report('Open this URL in your browser to authorize sple:')
-  report(context.authorizationUrl)
+  await report('Open this URL in your browser to authorize sple:')
+  await report(context.authorizationUrl)
   const code = await authorizationCode({
     mode: options.mode ?? 'loopback',
     context,

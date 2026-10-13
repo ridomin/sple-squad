@@ -21,7 +21,7 @@ export interface SpotifyLoginDependencies {
   saveToken?: (token: StoredToken) => Promise<void>
   tokenStoreOptions?: TokenStoreOptions
   readLine?: () => Promise<string | null>
-  writeStderr?: (message: string) => void
+  writeStderr?: (message: string) => void | Promise<void>
   openBrowser?: (url: string) => Promise<void>
   now?: () => number
   callbackTimeoutMs?: number
