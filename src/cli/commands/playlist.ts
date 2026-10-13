@@ -174,7 +174,7 @@ async function getPlaylistTracks (
   }
 }
 
-async function resolvePlaylist (provider: Provider, input: string): Promise<PlaylistSummary> {
+export async function resolvePlaylist (provider: Provider, input: string): Promise<PlaylistSummary> {
   const ref = provider.parsePlaylistRef(input)
   const byRef = ref === null ? null : await tryResolveByRef(provider, ref, input)
   if (byRef !== null) return byRef
