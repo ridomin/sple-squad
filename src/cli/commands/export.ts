@@ -190,6 +190,9 @@ function validateOptions (context: CommandContext): ValidatedOptions {
 }
 
 function validateSourceSelection (all: boolean, liked: boolean, positionals: string[]): void {
+  if (positionals.some(playlist => playlist.trim() === '')) {
+    throw new UsageError('Playlist arguments must not be empty')
+  }
   if (all && positionals.length > EMPTY_COUNT) {
     throw new UsageError('--all cannot be combined with playlist arguments')
   }

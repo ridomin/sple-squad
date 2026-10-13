@@ -143,8 +143,11 @@ test('directory exports use slug-id names and protect existing files unless forc
   assert.equal(asRecord(asRecord(JSON.parse(await readFile(outputFile, 'utf8'))).playlist).name, PLAYLIST_NAME)
 
   const protectedWrite = await invoke(['export', PLAYLIST_NAME, '-o', outputFile], createProvider())
-  assert.equal(protectedWrite.code, 1)
-  assert.match(protectedWrite.io.stderr.text, /use --force to overwrite/v)
+  assert.equal(protectedWrite.code, 2)
+  assert.equal(
+    protectedWrite.io.stderr.text,
+    `sple: Export target already exists; use --force to overwrite: ${outputFile}\n`
+  )
   assert.equal(asArray(parseRecord(await readFile(outputFile, 'utf8')).tracks).length, 1)
 
   const forced = await invoke(['export', PLAYLIST_NAME, '-o', outputFile, '--force', '--json'], createProvider())
@@ -193,7 +196,7 @@ test('the --all caller writes an index and records unreadable playlists as skipp
   const playlistPath = join(directory, 'cafe-mix-mix-1.json')
   const before = await readFile(playlistPath, 'utf8')
   const protectedRerun = await invoke(['export', '--all', '-o', directory], provider)
-  assert.equal(protectedRerun.code, 1)
+  assert.equal(protectedRerun.code, 2)
   assert.match(protectedRerun.io.stderr.text, /use --force to overwrite/v)
   assert.equal(await readFile(playlistPath, 'utf8'), before)
 
@@ -281,6 +284,24 @@ test('invalid stdout JSON mode is rejected before provider retrieval', async () 
   assert.equal(code, 2)
   assert.equal(retrieved, false)
   assert.match(io.stderr.text, /cannot be used when export data is written to stdout/v)
+})
+
+test('empty playlist arguments are usage errors before provider retrieval', async () => {
+  const provider = createProvider()
+  let retrieved = false
+  const guardedProvider: Provider = {
+    ...provider,
+    getPlaylist: async () => {
+      retrieved = true
+      return await provider.getPlaylist(PLAYLIST_ID)
+    }
+  }
+
+  const { code, io } = await invoke(['export', ''], guardedProvider)
+  assert.equal(code, 2)
+  assert.equal(io.stdout.text, '')
+  assert.equal(io.stderr.text, 'sple: Playlist arguments must not be empty\n')
+  assert.equal(retrieved, false)
 })
 
 test('ambiguous playlist names fail before creating output targets', async () => {

@@ -45,6 +45,30 @@ function isPositiveInteger (value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= MIN_POSITION
 }
 
+function checkOptionalString (
+  record: Record<string, unknown>,
+  property: string,
+  path: string,
+  problems: string[]
+): void {
+  const { [property]: value } = record
+  if (value !== undefined && typeof value !== 'string') {
+    problems.push(`${path} must be a string`)
+  }
+}
+
+function checkOptionalBoolean (
+  record: Record<string, unknown>,
+  property: string,
+  path: string,
+  problems: string[]
+): void {
+  const { [property]: value } = record
+  if (value !== undefined && typeof value !== 'boolean') {
+    problems.push(`${path} must be a boolean`)
+  }
+}
+
 function checkSchemaVersion (version: unknown, problems: string[]): void {
   if (version !== PLAYLIST_FILE_SCHEMA_VERSION) {
     problems.push(`Unsupported schema version: ${String(version)}. This version of sple supports v1 only.`)
@@ -85,6 +109,7 @@ function checkSource (source: unknown, problems: string[]): SourceCheck {
   if (source.kind !== 'playlist' && source.kind !== 'liked') {
     problems.push("source.kind must be 'playlist' or 'liked'")
   }
+  checkOptionalString(source, 'userId', 'source/userId', problems)
   return { kind: source.kind }
 }
 
@@ -109,6 +134,22 @@ function checkPlaylist (playlist: unknown, sourceKind: unknown, problems: string
     return {}
   }
   checkPlaylistName(playlist, sourceKind, problems)
+  for (const property of ['ref', 'id', 'description', 'url']) {
+    checkOptionalString(playlist, property, `playlist/${property}`, problems)
+  }
+  for (const property of ['public', 'collaborative']) {
+    checkOptionalBoolean(playlist, property, `playlist/${property}`, problems)
+  }
+  if (playlist.owner !== undefined) {
+    if (isRecord(playlist.owner)) {
+      if (typeof playlist.owner.id !== 'string') {
+        problems.push('playlist/owner/id must be a string')
+      }
+      checkOptionalString(playlist.owner, 'displayName', 'playlist/owner/displayName', problems)
+    } else {
+      problems.push('playlist/owner must be an object')
+    }
+  }
   if (typeof playlist.trackCount !== 'number' || !Number.isInteger(playlist.trackCount) || playlist.trackCount < EMPTY) {
     problems.push('playlist.trackCount must be a non-negative integer')
     return {}
@@ -120,8 +161,35 @@ function hasValidArtists (track: Record<string, unknown>): boolean {
   return Array.isArray(track.artists) && track.artists.length > EMPTY && track.artists.every(isNonEmptyString)
 }
 
-function hasValidRefs (track: Record<string, unknown>): boolean {
+function hasValidRefs (
+  track: Record<string, unknown>
+): track is Record<string, unknown> & { refs: Record<string, unknown> } {
   return isRecord(track.refs) && Object.keys(track.refs).length > EMPTY
+}
+
+function checkTrackRefs (track: Record<string, unknown>, index: number, problems: string[]): void {
+  if (hasValidRefs(track)) {
+    for (const [provider, ref] of Object.entries(track.refs)) {
+      if (typeof ref !== 'string') {
+        problems.push(`tracks[${index}].refs.${provider} must be a string`)
+      }
+    }
+  } else {
+    problems.push(`tracks[${index}].refs must have at least one entry`)
+  }
+}
+
+function checkTrackOptionalProperties (track: Record<string, unknown>, index: number, problems: string[]): void {
+  checkOptionalString(track, 'album', `tracks[${index}].album`, problems)
+  if (track.durationMs !== undefined && typeof track.durationMs !== 'number') {
+    problems.push(`tracks[${index}].durationMs must be a number`)
+  }
+  if (track.isrc !== undefined && track.isrc !== null && typeof track.isrc !== 'string') {
+    problems.push(`tracks[${index}].isrc must be a string or null`)
+  }
+  if (track.addedAt !== undefined && (!isNonEmptyString(track.addedAt) || !ISO_8601_UTC.test(track.addedAt))) {
+    problems.push(`tracks[${index}].addedAt must be an ISO 8601 UTC timestamp`)
+  }
 }
 
 function checkTrack (track: unknown, index: number, problems: string[]): number | undefined {
@@ -135,9 +203,8 @@ function checkTrack (track: unknown, index: number, problems: string[]): number 
   if (!hasValidArtists(track)) {
     problems.push(`tracks[${index}].artists must be a non-empty array of non-empty strings`)
   }
-  if (!hasValidRefs(track)) {
-    problems.push(`tracks[${index}].refs must have at least one entry`)
-  }
+  checkTrackRefs(track, index, problems)
+  checkTrackOptionalProperties(track, index, problems)
   if (!isPositiveInteger(track.position)) {
     problems.push(`tracks[${index}].position must be a positive integer`)
     return undefined
@@ -157,6 +224,8 @@ function checkUnsupportedItem (item: unknown, index: number, problems: string[])
   if (!isUnsupportedKind(item.kind)) {
     problems.push(`unsupportedItems[${index}].kind must be 'local', 'episode' or 'unavailable'`)
   }
+  checkOptionalString(item, 'name', `unsupportedItems[${index}].name`, problems)
+  checkOptionalString(item, 'ref', `unsupportedItems[${index}].ref`, problems)
   if (!isPositiveInteger(item.position)) {
     problems.push(`unsupportedItems[${index}].position must be a positive integer`)
     return undefined
