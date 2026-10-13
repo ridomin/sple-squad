@@ -60,6 +60,11 @@ Vitest/Prettier/typescript-eslint scaffold choices made in issue #1.
 **Why:** `src/core` gained its first multi-file import graph (canonical-track.ts, export/format.ts, export/invariants.ts). With `moduleResolution: NodeNext`, TS previously required `.js` extensions matching compiled output — but `npm test` runs `node --test` directly against the `.ts` sources (no build step), and Node's native TS support does not auto-map `.js` specifiers to sibling `.ts` files. Using `.js` extensions made tests fail with `ERR_MODULE_NOT_FOUND` even though `tsc` was happy. `rewriteRelativeImportExtensions` lets one `.ts`-extension import work for both `node --test` (source) and `tsc` (dist) without duplicating config.
 **Scope:** Applies to all future `sple` source code with relative imports between TS modules (core, CLI, provider adapters). Test files already used this pattern for importing source (`src/cli/index.test.ts` → `'./index.ts'`); this decision extends it to source-to-source imports too.
 
+### 2026-10-13: Spotify playlist access errors and provider page caps
+**By:** Rido (via Copilot)
+**What:** Keep ADR-0003 Amendment 2's mapping of Spotify playlist-item 403/404 responses to `AccessRestrictedError('not-owned')`; S2 remains explicitly unverified, so this mapping is an implementation contract and not a claim of live verification. When a requested page size exceeds a provider's declared cap, clamp it to that cap consistently across providers and preserve paging visibility; do not fail solely because the requested size is over the cap. Keep the search `limit + offset <= 1000` safety guard.
+**Why:** Resolve the review disagreement for PR #48 and preserve consistent fake/Spotify provider behavior while keeping unverified live assumptions clearly identified.
+
 ## Governance
 
 - All meaningful changes require team consensus
