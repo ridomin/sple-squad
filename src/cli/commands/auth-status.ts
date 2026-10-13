@@ -70,9 +70,11 @@ export function selectProviders (
   throw new UsageError(`Unknown provider: ${context.provider}. Registered providers: ${registered}`)
 }
 
+type ProviderStatus = AuthStatusOutput['providers'][number]
+
 function describeStatus (
   displayName: string,
-  status: AuthStatus & { id: string },
+  status: ProviderStatus,
   nowMs: number,
   context: CommandContext
 ): string[] {
@@ -82,17 +84,49 @@ function describeStatus (
     lines.push(`  User: ${name}(${status.user.id})`)
   }
   lines.push(`  Scopes: ${status.scopes.length === NO_SCOPES ? '(none)' : status.scopes.join(' ')}`)
+  const refreshExpired = status.refreshTokenExpiresAt !== undefined &&
+    Date.parse(status.refreshTokenExpiresAt) <= nowMs
   if (status.expiresAt !== undefined) {
-    const expiresMs = Date.parse(status.expiresAt)
-    const expired = expiresMs <= nowMs
-    lines.push(`  Token expires: ${status.expiresAt}${expired ? ' (expired)' : ''}`)
-    if (expired) {
-      context.stderr.write(`Warning: ${displayName} access token has expired; it will be refreshed on next use\n`)
-    } else if (expiresMs - nowMs < EXPIRY_WARNING_MS) {
-      context.stderr.write(`Warning: ${displayName} access token expires in less than 5 minutes\n`)
-    }
+    const access = describeAccessExpiry(displayName, status.expiresAt, nowMs, refreshExpired)
+    lines.push(access.line)
+    if (access.warning !== undefined) context.stderr.write(access.warning)
+  }
+  if (status.refreshTokenExpiresAt !== undefined) {
+    lines.push(describeRefreshExpiry(displayName, status, refreshExpired, context))
   }
   return lines
+}
+
+function describeRefreshExpiry (
+  displayName: string,
+  status: ProviderStatus,
+  refreshExpired: boolean,
+  context: CommandContext
+): string {
+  if (refreshExpired) {
+    context.stderr.write(
+      `Warning: ${displayName} refresh token has expired; run "sple auth login --provider ${status.id}"\n`
+    )
+  }
+  return `  Refresh token expires: ${status.refreshTokenExpiresAt ?? ''}${refreshExpired ? ' (expired)' : ''}`
+}
+
+function describeAccessExpiry (
+  displayName: string,
+  expiresAt: string,
+  nowMs: number,
+  refreshExpired: boolean
+): { line: string, warning?: string } {
+  const expiresMs = Date.parse(expiresAt)
+  const expired = expiresMs <= nowMs
+  const line = `  Token expires: ${expiresAt}${expired ? ' (expired)' : ''}`
+  if (expired && !refreshExpired) {
+    return { line, warning: `Warning: ${displayName} access token has expired; it will be refreshed on next use\n` }
+  }
+  if (!expired && expiresMs - nowMs < EXPIRY_WARNING_MS) {
+    return { line, warning: `Warning: ${displayName} access token expires in less than 5 minutes\n` }
+  }
+  return { line }
 }
 
 registerCommand(createAuthStatusCommand())

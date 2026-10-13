@@ -103,13 +103,14 @@ describe('sple auth status', () => {
 
 const NOW = new Date('2026-01-01T12:00:00.000Z')
 
-async function humanStatus (expiresAt: string | undefined): Promise<{ stdout: string, stderr: string }> {
+async function humanStatus (expiresAt: string | undefined, refreshTokenExpiresAt?: string): Promise<{ stdout: string, stderr: string }> {
   const provider = createProvider('spotify', 'Spotify')
   provider.auth.status = async () => await Promise.resolve({
     loggedIn: true,
     user: { id: 'u1', displayName: 'Ada' },
     scopes: ['a', 'b'],
-    ...(expiresAt === undefined ? {} : { expiresAt })
+    ...(expiresAt === undefined ? {} : { expiresAt }),
+    ...(refreshTokenExpiresAt === undefined ? {} : { refreshTokenExpiresAt })
   })
   const io = createIO()
   const commands = [createAuthStatusCommand(() => [provider], () => NOW)]
@@ -128,6 +129,19 @@ describe('sple auth status human output', () => {
       ''
     ].join('\n'))
     assert.equal(out.stderr, 'Warning: Spotify access token has expired; it will be refreshed on next use\n')
+  })
+
+  it('shows a valid refresh token expiry without a warning', async () => {
+    const out = await humanStatus('2026-01-01T13:00:00.000Z', '2026-02-01T00:00:00.000Z')
+    assert.match(out.stdout, / {2}Token expires: 2026-01-01T13:00:00\.000Z\n {2}Refresh token expires: 2026-02-01T00:00:00\.000Z\n$/v)
+    assert.doesNotMatch(out.stdout, /expired\)/v)
+    assert.equal(out.stderr, '')
+  })
+
+  it('marks an expired refresh token and warns about login instead of auto-refresh', async () => {
+    const out = await humanStatus('2026-01-01T11:00:00.000Z', '2026-01-01T11:30:00.000Z')
+    assert.match(out.stdout, / {2}Token expires: 2026-01-01T11:00:00\.000Z \(expired\)\n {2}Refresh token expires: 2026-01-01T11:30:00\.000Z \(expired\)\n$/v)
+    assert.equal(out.stderr, 'Warning: Spotify refresh token has expired; run "sple auth login --provider spotify"\n')
   })
 
   it('does not mark a valid token and warns when expiring within 5 minutes', async () => {
