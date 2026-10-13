@@ -20,6 +20,7 @@ const INDEX_FILENAME = 'index.json'
 
 export interface SkippedExport {
   input: string
+  playlist?: { id: string, name: string }
   error: {
     type: string
     message: string
@@ -110,6 +111,7 @@ async function writeAllExports (
     }),
     skipped: skipped.map(item => ({
       input: item.input,
+      ...(item.playlist === undefined ? {} : { id: item.playlist.id, name: item.playlist.name }),
       status: 'skipped',
       reason: item.error.type === 'AccessRestrictedError' ? 'not-owned' : item.error.message,
       error: item.error

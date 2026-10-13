@@ -402,7 +402,7 @@ Applies to commands that process several items: `export` with several playlists,
 
 ### A8. `export`
 
-`sple export <playlist…|-> [--liked] [-o <file|dir>] [--format json|csv] [--force]`; `--all` arrives in M2 (FR-EXP-5) and is rejected with exit 2 until then.
+`sple export <playlist…|-> [--liked] [-o <file|dir>] [--format json|csv] [--force]`; `--all` (FR-EXP-5) requires `-o <dir>` and exports every readable playlist, plus Liked Songs where the provider supports it (FR-EXP-6), one file per source, and writes `index.json` next to them: `files` (path, format, source, trackCount, unsupportedCount) and `skipped` (`input`, `id`/`name` when known, `status: "skipped"`, `reason`: `not-owned` for restricted playlists, otherwise the error message, and `error`). Skipped playlists are reported on stderr with a count; the exit code is then 1 (§5 partial failure).
 
 - **Validation first:** format is `json` (default) or `csv`; `-` at most once and alone; no empty arguments; at least one playlist or `--liked`. Several sources without `-o` → exit 2. `--json` without `-o` → exit 2.
 - **Destination:** without `-o`, the single source is written to stdout. With `-o`, the path is a **directory** when there are several sources, when it ends with a path separator, or when it is an existing directory; otherwise it is a **file** and its parent directory must exist. A directory path that exists as a file → exit 2. The directory is created if needed.

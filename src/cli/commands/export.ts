@@ -63,7 +63,13 @@ export function createExportCommand (
   return {
     path: ['export'],
     description: 'Export playlists as canonical JSON or CSV',
-    helpText: 'Usage: sple export <playlist…|--all|--liked> [-o path] [--format json|csv] [--force]',
+    helpText: [
+      'Usage: sple export <playlist…|--all|--liked> [-o path] [--format json|csv] [--force]',
+      '',
+      '--all writes every readable playlist (plus Liked Songs, where the provider supports it) to the',
+      'directory given with -o, one file per playlist, and an index.json. Playlists that cannot be read are',
+      'skipped with a warning and listed in index.json with "status": "skipped".'
+    ].join('\n'),
     options: {
       all: { type: 'boolean' },
       liked: { type: 'boolean' },
@@ -278,9 +284,18 @@ function addSkippedExport (options: {
 }): void {
   const { context, collected, task, error, reportFailure } = options
   collected.failures.push(error)
-  collected.skipped.push({ input: task.input, error: formatErrorOutput(error).error })
+  collected.skipped.push(toSkippedExport(task, error))
   if (reportFailure) {
     writeCliMessage(context.stderr, `Could not export "${task.input}": ${formatErrorMessage(error)}`, 'error')
+  }
+}
+
+function toSkippedExport (task: ExportTask, error: unknown): SkippedExport {
+  const { playlist } = task
+  return {
+    input: task.input,
+    ...(playlist === undefined ? {} : { playlist: { id: playlist.id, name: playlist.name } }),
+    error: formatErrorOutput(error).error
   }
 }
 
@@ -294,7 +309,7 @@ function addRemainingAsSkipped (options: {
   const { context, collected, remaining, error, reportFailure } = options
   for (const task of remaining) {
     collected.failures.push(error)
-    collected.skipped.push({ input: task.input, error: formatErrorOutput(error).error })
+    collected.skipped.push(toSkippedExport(task, error))
     if (reportFailure) {
       writeCliMessage(context.stderr, `Could not export "${task.input}": ${formatErrorMessage(error)}`, 'error')
     }
