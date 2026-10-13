@@ -226,6 +226,7 @@ describe('Spotify API token wiring', () => {
       'playlist-modify-public',
       'playlist-modify-private'
     ])
+    assert.deepEqual(requiredSpotifyScopes('updatePlaylist'), ['playlist-modify-public', 'playlist-modify-private'])
     assert.deepEqual(requiredSpotifyScopes('removePlaylist'), [
       'playlist-modify-public',
       'playlist-modify-private'

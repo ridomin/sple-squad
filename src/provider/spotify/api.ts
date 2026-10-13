@@ -46,6 +46,7 @@ export type SpotifyApiOperation =
   | 'getPlaylistTracks'
   | 'getLikedTracks'
   | { operation: 'createPlaylist', public: boolean, collaborative?: boolean }
+  | 'updatePlaylist'
   | 'removePlaylist'
   | 'populatePlaylist'
   | 'searchTracks'
@@ -58,9 +59,10 @@ export type SpotifyApiRequest = (
 ) => Promise<Response>
 
 /** The `Provider` members this module implements; the rest (`id`, `displayName`, `capabilities`, `auth`) belong to the provider factory. */
-export type SpotifyApiOperations = Omit<Provider, 'id' | 'displayName' | 'capabilities' | 'auth' | 'updatePlaylist'>
+export type SpotifyApiOperations = Omit<Provider, 'id' | 'displayName' | 'capabilities' | 'auth'>
 
 const NO_OFFSET = 0
+const NO_CHANGES = 0
 const MIN_LIMIT = 1
 // Spike S3 (UNVERIFIED, ADR-0003 Amendment 1): search `limit + offset <= 1000`.
 const SEARCH_WINDOW_LIMIT = 1000
@@ -221,7 +223,7 @@ export function createSpotifyApiOperations (request: SpotifyApiRequest): Spotify
     }
   }
 
-  return {
+  const api: SpotifyApiOperations = {
     search: async (q, page) => await search('search', q.text, q.type, page),
 
     parsePlaylistRef,
@@ -304,6 +306,27 @@ export function createSpotifyApiOperations (request: SpotifyApiRequest): Spotify
       return mapPlaylist(await readJson(response), me, true)
     },
 
+    updatePlaylist: async (ref, patch) => {
+      const id = requirePlaylistId(ref)
+      const body = {
+        ...(patch.name === undefined ? {} : { name: patch.name }),
+        ...(patch.description === undefined ? {} : { description: patch.description }),
+        ...(patch.public === undefined ? {} : { public: patch.public })
+      }
+      if (Object.keys(body).length === NO_CHANGES) {
+        throw new UsageError('updatePlaylist requires at least one of name, description, public')
+      }
+      const response = await request('updatePlaylist', 'PUT', `/v1/playlists/${id}`, {
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      if (!response.ok) {
+        throw new ProviderError(`Spotify API request failed (HTTP ${response.status})`)
+      }
+      // The PUT returns an empty body, so re-read the playlist for the canonical summary.
+      return await api.getPlaylist(id)
+    },
+
     removePlaylist: async (ref) => {
       const id = requirePlaylistId(ref)
       const query = new URLSearchParams({ uris: `spotify:playlist:${id}` })
@@ -348,5 +371,6 @@ export function createSpotifyApiOperations (request: SpotifyApiRequest): Spotify
       return { added, failed }
     }
   }
+  return api
 }
 
