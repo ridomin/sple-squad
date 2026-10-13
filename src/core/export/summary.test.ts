@@ -28,7 +28,7 @@ test('returns file metadata and unsupported-item counts for CLI integration', ()
 test('builds warning data for dropped unsupported items', () => {
   assert.deepEqual(createUnsupportedItemsWarning(file.unsupportedItems), {
     count: 1,
-    message: 'sple: warning: skipped 1 unsupported item and were not exported'
+    message: 'skipped 1 unsupported item (local files, episodes, or unavailable tracks) and were not exported'
   })
   assert.equal(createUnsupportedItemsWarning(0), undefined)
   assert.throws(() => createUnsupportedItemsWarning(-1), RangeError)

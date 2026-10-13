@@ -16,7 +16,6 @@ export interface UnsupportedItemsWarning {
 
 const ZERO_COUNT = 0
 const ONE_COUNT = 1
-
 /** Build the file-mode metadata shape expected by ADR-0007 §3.6. */
 export function createExportSummary (
   file: CanonicalPlaylistFile,
@@ -52,6 +51,6 @@ export function createUnsupportedItemsWarning (
   const noun = count === ONE_COUNT ? 'item' : 'items'
   return {
     count,
-    message: `sple: warning: skipped ${count} unsupported ${noun} and were not exported`
+    message: `skipped ${count} unsupported ${noun} (local files, episodes, or unavailable tracks) and were not exported`
   }
 }

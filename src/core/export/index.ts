@@ -2,10 +2,12 @@ export { serializePlaylistCSV } from './csv-writer.ts'
 export {
   ExportTargetError,
   getExportFilename,
+  prepareExportDirectoryTargets,
   prepareExportTargets,
   writeAtomicFile,
   type AtomicWriteOptions,
-  type ExportFormat
+type PrepareExportOptions,
+type ExportFormat
 } from './file-output.ts'
 export { serializePlaylistJSON } from './json-writer.ts'
 export {

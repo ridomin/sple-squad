@@ -115,3 +115,29 @@ test('rejects files that violate canonical invariants', () => {
   file.playlist.trackCount = 3
   assert.throws(() => serializePlaylistJSON(file), /trackCount/v)
 })
+
+test('rejects playlist fields with types outside the canonical schema', () => {
+  const invalidProperties: Array<[string, unknown]> = [
+    ['public', 'false'],
+    ['collaborative', 'false'],
+    ['ref', 123],
+    ['description', false],
+    ['url', 123],
+    ['owner', { id: 123 }],
+    ['owner', { id: 'owner-1', displayName: 123 }]
+  ]
+
+  for (const [property, value] of invalidProperties) {
+    const file = fixture()
+    Object.assign(file.playlist, { [property]: value })
+    assert.throws(
+      () => serializePlaylistJSON(file),
+      (error: unknown) => {
+        assert.ok(error instanceof Error)
+        assert.match(error.message, new RegExp(`playlist/${property}`, 'v'))
+        return true
+      },
+      `playlist.${property} should be validated against the canonical schema`
+    )
+  }
+})

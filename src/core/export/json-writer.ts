@@ -1,7 +1,33 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { Ajv2020 } from 'ajv/dist/2020.js'
+import type { AnySchema, ValidateFunction } from 'ajv'
 import type { CanonicalPlaylistFile } from './format.ts'
-import { assertPlaylistFile } from './invariants.ts'
+import { assertPlaylistFile, ExportFormatError } from './invariants.ts'
 
 const JSON_INDENT = 2
+const EMPTY_LENGTH = 0
+const schemaPath = fileURLToPath(new URL('../../../schemas/canonical-playlist.v1.schema.json', import.meta.url))
+const schemaValue: unknown = JSON.parse(readFileSync(schemaPath, 'utf8'))
+if (!isAnySchema(schemaValue)) throw new Error(`Invalid canonical playlist schema at ${schemaPath}`)
+const schema = schemaValue
+const validate: ValidateFunction = new Ajv2020({ strict: true }).compile(schema)
+
+function isAnySchema (value: unknown): value is AnySchema {
+  return typeof value === 'boolean' ||
+    (typeof value === 'object' && value !== null && !Array.isArray(value))
+}
+
+function assertCanonicalJSONSchema (serialized: string): void {
+  const output: unknown = JSON.parse(serialized)
+  if (!validate(output)) {
+    const problems = (validate.errors ?? []).map((error) => {
+      const path = error.instancePath.length > EMPTY_LENGTH ? error.instancePath : '/'
+      return `${path} ${error.message ?? 'is invalid'}`
+    })
+    throw new ExportFormatError(problems)
+  }
+}
 
 /**
  * Serialize a canonical playlist file in the stable v1 field order defined by
@@ -69,5 +95,7 @@ export function serializePlaylistJSON (file: CanonicalPlaylistFile): string {
       }))
   }
 
-  return `${JSON.stringify(canonical, null, JSON_INDENT)}\n`
+  const serialized = JSON.stringify(canonical, null, JSON_INDENT)
+  assertCanonicalJSONSchema(serialized)
+  return `${serialized}\n`
 }

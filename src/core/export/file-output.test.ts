@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import type { CanonicalPlaylistFile } from './format.ts'
 import {
+  assertDistinctTargets,
   ExportTargetError,
   getExportFilename,
   prepareExportTargets,
@@ -79,6 +80,19 @@ test('rejects colliding filenames before creating the output directory', async (
   await assert.rejects(readdir(destination))
 })
 
+test('detects case-insensitive filename collisions on Darwin and Windows', () => {
+  const targets = ['ABC', 'abc'].map((id) => join(
+    testRoot,
+    getExportFilename(fixture({
+      playlist: { id, name: 'Same Playlist', trackCount: 0 }
+    }), 'json')
+  ))
+
+  assert.throws(() => { assertDistinctTargets(targets, 'darwin') }, ExportTargetError)
+  assert.throws(() => { assertDistinctTargets(targets, 'win32') }, ExportTargetError)
+  assert.doesNotThrow(() => { assertDistinctTargets(targets, 'linux') })
+})
+
 test('file destinations require an existing parent directory', async () => {
   const destination = join(testRoot, 'missing-parent', 'export.json')
   await assert.rejects(
@@ -120,7 +134,10 @@ test('preflights all existing targets and allows explicit force', async () => {
       return true
     }
   )
-  assert.deepEqual(await prepareExportTargets(`${destination}/`, [file, secondFile], 'json', true), targets)
+  assert.deepEqual(
+    await prepareExportTargets(`${destination}/`, [file, secondFile], 'json', { force: true }),
+    targets
+  )
 })
 
 test('atomic writes refuse overwrite unless forced', async () => {

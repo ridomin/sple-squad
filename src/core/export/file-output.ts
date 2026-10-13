@@ -5,6 +5,11 @@ import type { CanonicalPlaylistFile } from './format.ts'
 
 export type ExportFormat = 'json' | 'csv'
 
+export interface PrepareExportOptions {
+  force?: boolean
+  forceDirectory?: boolean
+}
+
 export class ExportTargetError extends Error {
   constructor (message: string) {
     super(message)
@@ -60,8 +65,9 @@ function getTargets (absolutePath: string, files: CanonicalPlaylistFile[], forma
     : [absolutePath]
 }
 
-function assertDistinctTargets (targets: string[]): void {
-  const collisionKeys = targets.map((target) => process.platform === 'win32' ? target.toLowerCase() : target)
+export function assertDistinctTargets (targets: string[], platform: NodeJS.Platform = process.platform): void {
+  const isCaseInsensitive = platform === 'win32' || platform === 'darwin'
+  const collisionKeys = targets.map((target) => isCaseInsensitive ? target.toLowerCase() : target)
   if (new Set(collisionKeys).size !== targets.length) {
     throw new ExportTargetError(`Multiple playlists resolve to the same export target: ${targets.join(', ')}`)
   }
@@ -104,7 +110,7 @@ export async function prepareExportTargets (
   outputPath: string,
   files: CanonicalPlaylistFile[],
   format: ExportFormat,
-  force = false
+  options: PrepareExportOptions = {}
 ): Promise<string[]> {
   if (files.length === EMPTY_LENGTH) {
     throw new ExportTargetError('At least one playlist is required for export')
@@ -112,7 +118,8 @@ export async function prepareExportTargets (
 
   const absolutePath = resolve(outputPath)
   const existing = await pathStatOrNull(absolutePath)
-  const directoryExpected = shouldUseDirectory(outputPath, files.length, existing)
+  const directoryExpected = options.forceDirectory === true ||
+    shouldUseDirectory(outputPath, files.length, existing)
 
   if (directoryExpected && existing !== null && !existing.isDirectory()) {
     throw new ExportTargetError(`Export destination is not a directory: ${absolutePath}`)
@@ -128,10 +135,32 @@ export async function prepareExportTargets (
     await assertFileParentExists(absolutePath)
   }
 
-  if (!force) {
+  if (options.force !== true) {
     await assertNoExistingTargets(absoluteTargets)
   }
 
+  return absoluteTargets
+}
+
+/** Prepare named files plus an index file in a directory (used by `--all`). */
+export async function prepareExportDirectoryTargets (
+  outputPath: string,
+  filenames: string[],
+  options: PrepareExportOptions = {}
+): Promise<string[]> {
+  const absolutePath = resolve(outputPath)
+  const existing = await pathStatOrNull(absolutePath)
+  if (existing !== null && !existing.isDirectory()) {
+    throw new ExportTargetError(`Export destination is not a directory: ${absolutePath}`)
+  }
+
+  const targets = filenames.map((filename) => join(absolutePath, filename))
+  const absoluteTargets = targets.map((target) => resolve(target))
+  assertDistinctTargets(absoluteTargets)
+  await mkdir(absolutePath, { recursive: true })
+  if (options.force !== true) {
+    await assertNoExistingTargets(absoluteTargets)
+  }
   return absoluteTargets
 }
 
