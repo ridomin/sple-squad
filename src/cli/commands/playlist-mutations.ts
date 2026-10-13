@@ -341,9 +341,8 @@ function writeRemoveOutput (
     return
   }
   if (context.outputMode === 'table') {
-    const actionVerb = value.action === 'deleted' ? 'delete' : 'unfollow'
     const sentence = value.dryRun
-      ? `[dry-run] Would ${actionVerb} playlist "${value.playlist.name}" (${value.playlist.id}) in ${providerName}`
+      ? removeDryRunSentence(value, providerName)
       : `${capitalize(value.action)} playlist "${value.playlist.name}" (${value.playlist.id})`
     context.stdout.write(`${sentence}\n`)
     return
@@ -357,6 +356,14 @@ function writeRemoveOutput (
     [{ action: value.action, id: value.playlist.id, name: value.playlist.name }],
     { stdoutIsTTY: false }
   ))
+  if (value.dryRun) {
+    writeCliMessage(context.stderr, removeDryRunSentence(value, providerName))
+  }
+}
+
+function removeDryRunSentence (value: PlaylistRemoveOutput, providerName: string): string {
+  const actionVerb = value.action === 'deleted' ? 'delete' : 'unfollow'
+  return `[dry-run] Would ${actionVerb} playlist "${value.playlist.name}" (${value.playlist.id}) in ${providerName}`
 }
 
 function getVisibility (value: Pick<PlaylistCreateOutput, 'public' | 'collaborative'>): string {
