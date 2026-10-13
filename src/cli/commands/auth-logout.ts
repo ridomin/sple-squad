@@ -36,17 +36,21 @@ async function runAuthLogout (
   const selected = context.flags.all === true
     ? providers(context)
     : selectProviders(context, providers(context))
-  const results = await Promise.all(selected.map(async provider => ({
-    provider,
-    result: await provider.auth.logout()
-  })))
-  if (context.outputMode === 'quiet') return
-  for (const { provider, result } of results) {
-    const revocation = result.revoked ? 'Access revoked.' : 'Local credentials removed; access was not revoked.'
-    const deleted = result.deletedData.length === NO_DELETED_DATA ? '' : ` Removed: ${result.deletedData.join(', ')}.`
-    context.stdout.write(`${provider.displayName}: ${revocation}${deleted}\n`)
-    if (result.notice !== undefined) context.stderr.write(`sple: warning: ${result.notice}\n`)
+  const failures: unknown[] = []
+  for (const provider of selected) {
+    try {
+      // eslint-disable-next-line no-await-in-loop -- sequential so first-failure order follows provider order
+      const result = await provider.auth.logout()
+      if (context.outputMode === 'quiet') continue
+      context.stdout.write(`${result.revoked ? 'Revoked access with' : 'Logged out from'} ${provider.displayName}\n`)
+      if (result.deletedData.length > NO_DELETED_DATA) context.stdout.write(`Deleted: ${result.deletedData.join(', ')}\n`)
+      if (result.notice !== undefined) context.stdout.write(`${result.notice}\n`)
+    } catch (error) {
+      failures.push(error)
+    }
   }
+  const [firstFailure] = failures
+  if (failures.length > NO_DELETED_DATA) throw firstFailure instanceof Error ? firstFailure : new Error(String(firstFailure))
 }
 
 function validateLogoutInvocation (context: CommandContext): void {
