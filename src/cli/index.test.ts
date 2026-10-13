@@ -15,6 +15,7 @@ import {
   formatRows,
   getExitCode,
   getPartialFailureExitCode,
+  getRegisteredCommands,
   getHelpText,
   getVersion,
   parseCommandArguments,
@@ -115,6 +116,7 @@ describe('CLI framework contract', () => {
     const commandIO = createIO()
     assert.equal(await run(['playlist', 'list', '--help'], { commands: [sampleCommand], io: commandIO }), 0)
     assert.equal(commandIO.stdout.text, `${sampleCommand.helpText}\n`)
+    assert.ok(getRegisteredCommands().some(command => command.path.join(' ') === 'search'))
   })
 
   it('maps an unknown command to a usage error (exit 2)', async () => {
