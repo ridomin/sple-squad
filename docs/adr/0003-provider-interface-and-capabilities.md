@@ -73,6 +73,7 @@ export interface ProviderCapabilities {
   likedSongs: { read: 'exact' | 'approximate' | 'none'; write: false; readCap?: number };
 
   // matching (FR-MIG-2)
+  searchFieldFilters: Array<'artist' | 'album' | 'year'>; // native field: filters sple search may pass through (FR-SEARCH-3); others => usage error, exit 2
   isrcSearchMode: 'lookup' | 'filter' | 'none';    // replaces supportsIsrcSearch
   searchReturnsDuration: boolean;                  // false => searchTracks fetches details (getTrackDetails) to fill durationMs
   musicAwareSearch: boolean;
@@ -236,6 +237,7 @@ Error types are defined in `src/core/provider/errors.ts` as a closed set; the CL
 | `readPageSize` | `{ playlists: 50, playlistItems: 100, liked: 50 }` | `{ playlists: 50, playlistItems: 50, liked: 50 }` | Spotify: default page size 50 per owner decision S3 (2026-10-13; maximums not measured, so `playlistItems` 100 is an upper bound that is not relied on, see Amendment 3); YouTube: `maxResults` cap of `playlists.list` / `playlistItems.list` |
 | `playlistItemsAccess` | **`'owned-or-collaborator'`** | `'all'` | Spotify: collaborative access untested (S2 deferred, 2026-10-13); owned playlists readable, readability of non-owned playlists is probed at read time (403/404 → not readable) |
 | `likedSongs` | `{ read: 'exact', write: false }` | `{ read: 'approximate', write: false, readCap: 5000 }` | |
+| `searchFieldFilters` | `['artist', 'album', 'year']` | `[]` | FR-SEARCH-3; fake defaults to `[]` |
 | `isrcSearchMode` | **`'none'`** (owner decision S1, 2026-10-13: ISRC search dropped) | `'none'` | |
 | `searchReturnsDuration` | true | false | |
 | `musicAwareSearch` | true | false | |

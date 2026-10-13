@@ -17,6 +17,7 @@ const FAKE_PROVIDER_DEFAULTS: ProviderCapabilities = {
   readPageSize: { playlists: 50, playlistItems: 100, liked: 50 },
   playlistItemsAccess: 'all',
   likedSongs: { read: 'exact', write: false },
+  searchFieldFilters: [],
   isrcSearchMode: 'none',
   searchReturnsDuration: true,
   musicAwareSearch: false,
@@ -37,6 +38,7 @@ test('every capability value can be overridden (tests need owned-only, cursor-fo
     official: true,
     playlistItemsAccess: 'owned-or-collaborator',
     maxSearchPageSize: 10,
+    searchFieldFilters: [],
     isrcSearchMode: 'filter',
     canDeletePlaylist: false
   }

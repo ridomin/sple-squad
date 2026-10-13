@@ -6,6 +6,7 @@ import { UsageError } from '../../core/provider/errors.ts'
 import { getRegisteredProviders } from '../../provider/registry.ts'
 import type { SearchOutput } from '../output/types.ts'
 import { writeCliMessage } from '../messages.ts'
+import { validateSearchFilters } from './search-filters.ts'
 
 const DEFAULT_LIMIT = 10
 const DEFAULT_MAX_RESULTS = 100
@@ -35,7 +36,7 @@ export function createSearchCommand (
   return {
     path: ['search'],
     description: 'Search the provider catalog',
-    helpText: 'Usage: sple search <query…> [--type track|album|artist|playlist] [--limit N] [--offset N | --all [--max-results N]]',
+    helpText: 'Usage: sple search <query…> [artist:X] [album:X] [year:YYYY[-YYYY]] [--type track|album|artist|playlist] [--limit N] [--offset N | --all [--max-results N]]',
     options: {
       type: { type: 'string' },
       limit: { type: 'string' },
@@ -59,6 +60,7 @@ async function runSearch (
 
   const options = parseSearchOptions(context)
   const provider = resolveProvider(context)
+  validateSearchFilters(query, provider.displayName, provider.capabilities)
   if (options.offset !== undefined &&
       options.offset > EMPTY_COUNT &&
       provider.capabilities.paginationModel !== 'offset') {

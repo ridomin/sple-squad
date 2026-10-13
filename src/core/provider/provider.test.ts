@@ -28,6 +28,7 @@ const STUB_CAPABILITIES: ProviderCapabilities = {
   readPageSize: { playlists: 50, playlistItems: 100, liked: 50 },
   playlistItemsAccess: 'all',
   likedSongs: { read: 'exact', write: false },
+  searchFieldFilters: [],
   isrcSearchMode: 'filter',
   searchReturnsDuration: true,
   musicAwareSearch: false,

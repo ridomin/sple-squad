@@ -30,6 +30,7 @@ export const SPOTIFY_API_CAPABILITIES: ProviderCapabilities = {
   },
   playlistItemsAccess: 'owned-or-collaborator',
   likedSongs: { read: 'exact', write: false },
+  searchFieldFilters: ['artist', 'album', 'year'],
   isrcSearchMode: 'none',
   searchReturnsDuration: true,
   musicAwareSearch: true,
