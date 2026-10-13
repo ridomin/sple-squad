@@ -51,7 +51,7 @@ interface MatchingStrategy {
 - Rationale: No search needed; use what we know.
 
 **2. ISRC Strategy** (priority 2, medium)
-- Condition: Both source and target provider support ISRC; track has ISRC in file
+- Condition: Target provider `isrcSearchMode !== 'none'` and track has ISRC in file. Spotify is `'none'` (owner decision S1, 2026-10-13), so this step is skipped there; no current provider enables it
 - API calls: 1 (search by ISRC)
 - Confidence: 0.95 (95%)
 - Rationale: ISRC uniquely identifies a recording; very reliable.
@@ -84,7 +84,7 @@ Threshold: the metadata strategy returns no candidate below 0.4. The engine addi
 Each strategy declares which requests it can handle via `isApplicable()`. The engine skips inapplicable strategies:
 
 - **Known Ref** is always applicable (but returns null if no known ref exists)
-- **ISRC** is applicable only if the target provider supports ISRC search and the track has an ISRC
+- **ISRC** is applicable only if the target provider supports ISRC search (`isrcSearchMode !== 'none'`; not Spotify, per S1) and the track has an ISRC
 - **Metadata** is applicable if the track has a title
 
 This avoids unnecessary API calls and keeps the report honest ("tried metadata, found nothing").

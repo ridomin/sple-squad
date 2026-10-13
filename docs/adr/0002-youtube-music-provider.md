@@ -25,7 +25,7 @@
 
 The requirements that shape this decision:
 
-- **FR-MIG-2:** matching is ISRC first, then metadata.
+- **FR-MIG-2:** matching is known ref, then ISRC (only when the target supports ISRC search), then metadata. With Spotify ISRC search dropped (S1, 2026-10-13), metadata is the practical path in both directions.
 - **FR-MIG-4/5:** migrations are resumable and idempotent, quota-aware, estimate their cost up front, and can be spread across days.
 - **PRV-1/2:** all access goes through a `Provider` interface that declares capability flags.
 - **NFR-3:** PKCE only, tokens kept in a user-only file.
