@@ -13,7 +13,7 @@ const FIXED_NOW = Date.UTC(2026, 9, 10, 18)
 
 interface MockRequest {
   url: string
-  init?: RequestInit
+  init?: RequestInit | undefined
 }
 
 function makeSuccessfulFetch (requests: MockRequest[]): typeof fetch {

@@ -162,8 +162,9 @@ describe("pagination traversal without silent truncation", () => {
     while (nextOffset !== undefined) {
       // eslint-disable-next-line no-await-in-loop -- sequential paging traversal
       const page = await api.getPlaylistTracks(PL_ID, { limit: 500, offset: nextOffset })
-      for (const item of page.items) {
-        collected.push(item.refs.spotify)
+      for (const { refs: { spotify: ref } } of page.items) {
+        assert.ok(ref !== undefined)
+        collected.push(ref)
       }
       nextOffset = page.next?.offset
     }

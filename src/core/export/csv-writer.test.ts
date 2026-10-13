@@ -42,10 +42,10 @@ test('uses empty cells for absent metadata and leaves formula-like values unchan
   assert.ok(firstTrack !== undefined)
   firstTrack.title = '=SUM(A1:A2)'
   firstTrack.artists = ['Artist']
-  firstTrack.album = undefined
-  firstTrack.durationMs = undefined
-  firstTrack.isrc = undefined
-  firstTrack.addedAt = undefined
+  delete firstTrack.album
+  delete firstTrack.durationMs
+  delete firstTrack.isrc
+  delete firstTrack.addedAt
 
   const [, row] = serializePlaylistCSV(file).split('\r\n')
   assert.equal(row, '1,=SUM(A1:A2),Artist,,,,,spotify:track:abc')

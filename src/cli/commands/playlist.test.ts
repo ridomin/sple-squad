@@ -103,8 +103,7 @@ async function run (argv: string[], provider: Provider): Promise<{
   const exitCode = await runCli(argv, {
     commands: createPlaylistCommands(() => provider),
     io,
-    processEnv: { SPLE_DEFAULT_PROVIDER: 'fake' },
-    envFilePath: '.sple-playlist-no-env'
+    processEnv: { SPLE_DEFAULT_PROVIDER: 'fake' }
   })
   return { exitCode, io }
 }
@@ -456,8 +455,7 @@ describe('playlist command registration', () => {
       processEnv: {
         SPLE_DEFAULT_PROVIDER: 'fake',
         SPLE_ENABLE_FAKE_PROVIDER: '1'
-      },
-      envFilePath: '.sple-playlist-no-env'
+      }
     })
 
     assert.equal(exitCode, EXIT_CODES.success)

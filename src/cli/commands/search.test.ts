@@ -60,7 +60,7 @@ function asRecord (value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new TypeError('Expected a JSON object')
   }
-  return value
+  return Object.fromEntries(Object.entries(value))
 }
 
 function getItems (value: unknown): unknown[] {
@@ -78,8 +78,7 @@ async function invoke (
   const code = await runCli(args, {
     commands: [createSearchCommand(() => provider)],
     io,
-    processEnv: { SPLE_DEFAULT_PROVIDER: 'fake' },
-    envFilePath: '.sple-search-test-no-env'
+    processEnv: { SPLE_DEFAULT_PROVIDER: 'fake' }
   })
   return { code, io }
 }

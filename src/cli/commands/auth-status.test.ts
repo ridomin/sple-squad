@@ -171,8 +171,8 @@ describe('sple auth logout', () => {
       provider.auth.logout = async () => {
         await sleep(delay)
         calls.push(name)
-        if (behavior === 'notfound') throw new NotFoundError('first failure')
-        if (behavior === 'auth') throw new AuthRequiredError('second failure')
+        if (behavior === 'notfound') throw new NotFoundError('playlist', 'first failure')
+        if (behavior === 'auth') throw new AuthRequiredError('no-token', undefined, 'second failure')
         return { revoked: true, deletedData: ['t'] }
       }
       return provider
