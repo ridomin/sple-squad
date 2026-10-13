@@ -8,6 +8,7 @@ How to decide who handles what.
 |-----------|----------|----------|
 | Spec/requirements review, ADR authoring, milestone planning, cross-cutting architecture | Lead | Review `docs/requirements.md`, decompose a milestone, resolve an open question in §10 |
 | Core/CLI implementation, canonical model, matching engine, config | Core Dev | Implement `sple playlist show`, add a `--filter` flag, extend the matching engine |
+| CLI/runtime implementation under reviewer lockout | CLI Engineer | Revise PR #44 export CLI error handling and argument validation only |
 | Provider adapters, OAuth, HTTP client, rate/quota limiting | Provider Dev | Spotify adapter work, YouTube Data API integration, token refresh bugs |
 | Tests, fixtures, coverage | Tester | Add fixtures for a new endpoint, raise coverage, write matching-engine test vectors |
 
