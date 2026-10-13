@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { startCli } from './framework.ts'
 import './commands/auth-login.ts'
+import './commands/auth-logout.ts'
+import './commands/auth-status.ts'
 
 export { parseCommandArguments, parseGlobalArguments } from './args.ts'
 export type {
@@ -40,6 +42,8 @@ export { clearProgressIndicators, ProgressIndicator } from './progress.ts'
 export { configureLogging, createLogger, redactSecrets } from './logger.ts'
 export { getRegisteredCommands, registerCommand } from './registry.ts'
 export { createAuthLoginCommand } from './commands/auth-login.ts'
+export { createAuthLogoutCommand } from './commands/auth-logout.ts'
+export { createAuthStatusCommand } from './commands/auth-status.ts'
 export { registerSensitiveValue } from '../core/security/secrets.ts'
 export { writeCliMessage } from './messages.ts'
 export type { MessageKind } from './messages.ts'
