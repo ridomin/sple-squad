@@ -66,7 +66,7 @@ function createProvider (): Provider {
 
 function asRecord (value: unknown): Record<string, unknown> {
   assert.ok(typeof value === 'object' && value !== null && !Array.isArray(value))
-  return value
+  return Object.fromEntries(Object.entries(value))
 }
 
 function asArray (value: unknown): unknown[] {

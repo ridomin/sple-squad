@@ -3,17 +3,19 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import { Ajv2020 } from 'ajv/dist/2020.js'
-import type { ValidateFunction } from 'ajv'
+import type { SchemaObject, ValidateFunction } from 'ajv'
 import type { CanonicalPlaylistFile } from './format.ts'
 import { serializePlaylistJSON } from './json-writer.ts'
 
 const schemaPath = fileURLToPath(new URL('../../../schemas/canonical-playlist.v1.schema.json', import.meta.url))
-const schema: unknown = JSON.parse(readFileSync(schemaPath, 'utf8'))
+const parsedSchema: unknown = JSON.parse(readFileSync(schemaPath, 'utf8'))
+assert.ok(typeof parsedSchema === 'object' && parsedSchema !== null)
+const schema: SchemaObject = Object.fromEntries(Object.entries(parsedSchema))
 const validate: ValidateFunction = new Ajv2020({ strict: true }).compile(schema)
 
 function asRecord (value: unknown): Record<string, unknown> {
   assert.ok(typeof value === 'object' && value !== null && !Array.isArray(value))
-  return value
+  return Object.fromEntries(Object.entries(value))
 }
 
 function asArray (value: unknown): unknown[] {

@@ -100,12 +100,12 @@ describe('provider registry: fake-provider gate (SPLE_ENABLE_FAKE_PROVIDER)', ()
       config,
       spotifyProviderOptions: {
         login: async ({ clientId, mode, scopes }, dependencies) => {
-          await dependencies.writeStderr?.('https://accounts.spotify.com/authorize?mock=1')
-          pastedRedirect = await dependencies.readLine?.() ?? ''
+          await dependencies?.writeStderr?.('https://accounts.spotify.com/authorize?mock=1')
+          pastedRedirect = await dependencies?.readLine?.() ?? ''
           return await Promise.resolve({
           userId: clientId,
-          displayName: mode,
-          scopes
+          ...(mode === undefined ? {} : { displayName: mode }),
+          scopes: scopes ?? []
           })
         }
       }

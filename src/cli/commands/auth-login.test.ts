@@ -42,8 +42,10 @@ describe('sple auth login', () => {
 
   it('dispatches the default login mode and injected OAuth dependencies', async () => {
     const io = createIO()
-    let actualOptions: SpotifyLoginOptions | undefined = undefined
-    let actualDependencies: SpotifyLoginDependencies | undefined = undefined
+    const captured: {
+      options?: SpotifyLoginOptions | undefined
+      dependencies?: SpotifyLoginDependencies | undefined
+    } = {}
     const oauthDependencies: SpotifyLoginDependencies = {
       fetchImpl: async () => {
         await Promise.resolve()
@@ -76,8 +78,8 @@ describe('sple auth login', () => {
       options: SpotifyLoginOptions,
       dependencies?: SpotifyLoginDependencies
     ): Promise<SpotifyLoginResult> => {
-      actualOptions = options
-      actualDependencies = dependencies
+      captured.options = options
+      captured.dependencies = dependencies
       dependencies?.writeStderr?.('Waiting for authorization...')
       await Promise.resolve()
       return loginResult
@@ -88,11 +90,11 @@ describe('sple auth login', () => {
       io,
       processEnv: { SPLE_SPOTIFY_CLIENT_ID: CLIENT_ID }
     }), EXIT_CODES.success)
-    assert.deepEqual(actualOptions, { clientId: CLIENT_ID, mode: 'loopback' })
-    assert.equal(actualDependencies?.fetchImpl, oauthDependencies.fetchImpl)
-    assert.equal(actualDependencies?.openBrowser, oauthDependencies.openBrowser)
-    assert.equal(actualDependencies?.readLine, oauthDependencies.readLine)
-    assert.equal(actualDependencies?.saveToken, oauthDependencies.saveToken)
+    assert.deepEqual(captured.options, { clientId: CLIENT_ID, mode: 'loopback' })
+    assert.equal(captured.dependencies?.fetchImpl, oauthDependencies.fetchImpl)
+    assert.equal(captured.dependencies?.openBrowser, oauthDependencies.openBrowser)
+    assert.equal(captured.dependencies?.readLine, oauthDependencies.readLine)
+    assert.equal(captured.dependencies?.saveToken, oauthDependencies.saveToken)
     assert.equal(io.stdout.text, [
       'Logged in to Spotify',
       'User: Test User',
@@ -118,9 +120,9 @@ describe('sple auth login', () => {
       { flag: '--manual', mode: 'manual' }
     ].map(async testCase => {
       const io = createIO()
-      let actualOptions: SpotifyLoginOptions | undefined = undefined
+      const captured: { options?: SpotifyLoginOptions | undefined } = {}
       const login = async (options: SpotifyLoginOptions): Promise<SpotifyLoginResult> => {
-        actualOptions = options
+        captured.options = options
         await Promise.resolve()
         return { userId: 'test-user', scopes: [] }
       }
@@ -129,7 +131,7 @@ describe('sple auth login', () => {
         io,
         processEnv: { SPLE_SPOTIFY_CLIENT_ID: CLIENT_ID }
       }), EXIT_CODES.success)
-      assert.deepEqual(actualOptions, { clientId: CLIENT_ID, mode: testCase.mode })
+      assert.deepEqual(captured.options, { clientId: CLIENT_ID, mode: testCase.mode })
       assert.equal(io.stdout.text, 'Logged in to Spotify\nUser: test-user\nScopes: none\n')
       assert.equal(io.stderr.text, '')
     }))
@@ -152,7 +154,7 @@ describe('sple auth login', () => {
         processEnv: {},
         message: 'Missing Spotify Client ID. Set SPLE_SPOTIFY_CLIENT_ID in your environment.'
       }
-    ] as const
+    ]
 
     await Promise.all(cases.map(async testCase => {
       const io = createIO()
