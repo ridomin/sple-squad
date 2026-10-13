@@ -376,6 +376,16 @@ describe('playlist remove', () => {
     await assert.doesNotReject(async () => await provider.getPlaylist(playlist.ref))
   })
 
+  it('dry-run TSV keeps real-run stdout and writes the Would sentence to stderr', async () => {
+    const provider = createFakeProvider()
+    const playlist = await provider.createPlaylist({ name: 'Doomed', public: false })
+    const result = await invoke(['playlist', 'remove', playlist.ref, '--dry-run'], provider)
+    assert.equal(result.exitCode, EXIT_CODES.success)
+    assert.equal(result.io.stdout.text, `deleted\t${playlist.id}\tDoomed\n`)
+    assert.match(result.io.stderr.text, /\[dry-run\] Would delete playlist "Doomed" \(.+\) in /v)
+    await assert.doesNotReject(async () => await provider.getPlaylist(playlist.ref))
+  })
+
   it('returns the provider-reported action for unfollow and supports table/TSV/quiet modes', async () => {
     const provider = createFakeProvider({ capabilities: { canDeletePlaylist: false } })
     const playlist = await provider.createPlaylist({ name: 'Followed', public: false })
