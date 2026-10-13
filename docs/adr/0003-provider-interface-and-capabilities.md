@@ -1,6 +1,6 @@
 # ADR 0003: Provider interface and capabilities
 
-- **Status:** Accepted (2026-10-01); amended 2026-10-02 (Amendment 1) and 2026-10-07 (Amendment 2)
+- **Status:** Accepted (2026-10-01); amended 2026-10-02 (Amendment 1), 2026-10-07 (Amendment 2) and 2026-10-13 (Amendment 3)
 - **Date:** 2026-10-01
 - **Deciders:** project owner (user); architect (author)
 - **Related:** `docs/requirements.md` PRV-1…6, FR-AUTH, FR-PL, FR-EXP, FR-MIG, §8, §10 (spikes S1–S7); ADR 0001 (Amazon Music); ADR 0002 (YouTube Music); ADR 0004 (Token store and config)
@@ -233,10 +233,10 @@ Error types are defined in `src/core/provider/errors.ts` as a closed set; the CL
 | `supportsRevocation` | false | true | Spotify has no revoke endpoint; logout deletes local tokens and the docs point to the account's Apps page |
 | `paginationModel` | `'offset'` | `'cursor-forward'` | YouTube uses `pageToken` |
 | `maxSearchPageSize` | **10** | 50 | Spotify Feb 2026 |
-| `readPageSize` | `{ playlists: 50, playlistItems: 100, liked: 50 }` | `{ playlists: 50, playlistItems: 50, liked: 50 }` | Spotify: spike S3; YouTube: `maxResults` cap of `playlists.list` / `playlistItems.list` |
-| `playlistItemsAccess` | **`'owned-or-collaborator'`** | `'all'` | Spotify: spike S2 (2026-10-02); readability of non-owned playlists is probed at read time |
+| `readPageSize` | `{ playlists: 50, playlistItems: 100, liked: 50 }` | `{ playlists: 50, playlistItems: 50, liked: 50 }` | Spotify: default page size 50 per owner decision S3 (2026-10-13; maximums not measured, so `playlistItems` 100 is an upper bound that is not relied on, see Amendment 3); YouTube: `maxResults` cap of `playlists.list` / `playlistItems.list` |
+| `playlistItemsAccess` | **`'owned-or-collaborator'`** | `'all'` | Spotify: collaborative access untested (S2 deferred, 2026-10-13); owned playlists readable, readability of non-owned playlists is probed at read time (403/404 → not readable) |
 | `likedSongs` | `{ read: 'exact', write: false }` | `{ read: 'approximate', write: false, readCap: 5000 }` | |
-| `isrcSearchMode` | `'filter'` (spike S1, 2026-10-02) | `'none'` | |
+| `isrcSearchMode` | **`'none'`** (owner decision S1, 2026-10-13: ISRC search dropped) | `'none'` | |
 | `searchReturnsDuration` | true | false | |
 | `musicAwareSearch` | true | false | |
 | `canDeletePlaylist` | false (unfollow via `DELETE /me/library`) | true | |
@@ -261,7 +261,7 @@ Amazon Music has no declared values: the provider is rejected (ADR 0001). The fi
 - M0 implements these types, a fake provider that declares them (with configurable values so tests can cover `owned-only`, `cursor-forward`, `daily-buckets`, …), and the error-to-exit-code mapping.
 - M0 also implements the HTTP client base class (used by all adapters), token-store module, and config/paths module (see ADR-0004).
 - The capability tables in ADR 0001 and ADR 0002 are historical; this ADR is the source of truth.
-- Spike results S1 and S2 are recorded in Amendment 1.
+- Spike decisions S1–S4 are recorded in Amendment 3 (owner decisions, not live verification); Amendment 1's spike results are superseded.
 - Search results are typed (`SearchItem`, a union discriminated on `type`), so the CLI renders and serializes them without casts or provider knowledge. Adapters map provider payloads to `SearchItem` themselves; a new search type is an amendment.
 - Playlist reference parsing (IDs, URIs, URLs) lives in each adapter's `parsePlaylistRef`, so the core resolver never branches on provider ID (PRV-5).
 - New capabilities need an amendment to this ADR.
@@ -277,6 +277,7 @@ Amazon Music has no declared values: the provider is rejected (ADR 0001). The fi
 
 - **Date:** 2026-10-02
 - **Spike report:** [docs/spikes/M1-spotify-spikes.md](../spikes/M1-spotify-spikes.md)
+- **Note (2026-10-13):** the spike-derived rows below (S1–S4) are superseded by Amendment 3; they were never backed by a committed evidence report.
 
 | Change | Why |
 |---|---|
@@ -337,7 +338,7 @@ Login requests the union of the table: `playlist-read-private playlist-read-coll
 | Operation | Request |
 |---|---|
 | `search` | `GET /v1/search?q=&type=&limit=(≤10)&offset=`; `next` from the section's `next` URL (or `offset + count < total`) |
-| `searchTracks` | as `search` with `type=track`: `q=isrc:<ISRC>`, or `q=<title> <first artist>` (plain text, as M3 used) |
+| `searchTracks` | as `search` with `type=track`: `q=<title> <first artist>` (plain text, as M3 used); no `isrc:` filter (S1, Amendment 3) |
 | `listPlaylists` | `GET /v1/me/playlists?limit=(≤50)&offset=` |
 | `getPlaylist` | `GET /v1/playlists/{id}` |
 | `getPlaylistTracks` | `GET /v1/playlists/{id}/items?limit=(≤100)&offset=`; items with a `null` track, `is_local: true`, or `type: 'episode'` are dropped |
@@ -347,3 +348,15 @@ Login requests the union of the table: `playlist-read-private playlist-read-coll
 | `populatePlaylist` | `POST /v1/playlists/{id}/items` with body `{ "uris": [...] }` (201 + `snapshot_id`), at most 100 per request, in order. Refs that are not `spotify:track:<id>` go to `failed` (`Not a Spotify track URI`) without a request. Auth, quota and rate-limit errors propagate; any other error marks every ref in that batch failed with the error message and the next batch runs. `skipExisting` first pages through `GET /v1/playlists/{id}/items` and leaves out refs already present (neither added nor failed). |
 
 Track mapping: `title` = `name` (`"(untitled)"` if empty), `artists` = artist names (`["Unknown Artist"]` if none), `album` = `album.name`, `durationMs` = `duration_ms`, `isrc` = `external_ids.isrc` when present, otherwise `null`, `refs.spotify` = `uri`.
+
+## Amendment 3 (M1 spike decisions)
+
+- **Date:** 2026-10-13
+- **Basis:** owner decisions by Rido, **not** live API verification. See [docs/spikes/M1-spotify-spikes.md](../spikes/M1-spotify-spikes.md).
+
+| Change | Why |
+|---|---|
+| Spotify `isrcSearchMode` is `'none'` (S1); supersedes Amendment 1 `'filter'` | ISRC search is dropped. `TrackQuery` `kind: 'isrc'` is not sent to Spotify. `CanonicalTrack.isrc` is still filled from `external_ids.isrc` when the API returns it. |
+| `playlistItemsAccess` stays `'owned-or-collaborator'`, but collaborator read access is untested (S2 deferred) | Conservative behavior: owned playlists are readable; any other playlist is probed on `/items` and a 403/404 gives `itemsReadable: false` / `AccessRestrictedError('not-owned')`. Do not rely on the `collaborative` flag. |
+| Spotify page sizes: default 50 (S3) | Decision, not measurement; maximums are not verified, so adapters do not request more than 50 (search stays `maxSearchPageSize` 10). `readPageSize.playlistItems` should be 50. |
+| Premium is assumed (S4) | No Premium-specific detection. A 403 gets generic handling (`AccessRestrictedError`); the `/premium/i` message mapping is optional, not required. |

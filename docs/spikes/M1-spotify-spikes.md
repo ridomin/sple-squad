@@ -1,46 +1,43 @@
 # M1 Spotify API spikes (S1–S4)
 
-- **Verification date:** 2026-10-10
-- **Verification status:** S1–S4 were not reproduced against the live Spotify API in this pass.
-- **Reason:** no Spotify Development Mode app, authorized Spotify test account, or safe live-test setup was provided. No Spotify credentials were sought in files, and no live Spotify request was made.
-- **Sign-off:** pending Rido's review. This report does not constitute human sign-off.
+- **Status date:** 2026-10-13
+- **Status:** S1–S4 are closed by **owner decisions and assumptions** (Rido), so M1 can complete without live spike verification.
+- **No live results are claimed.** None of S1–S4 was run against the live Spotify API. Earlier text that recorded "Resolved 2026-10-02" results (5 of 5 ISRCs, 50 / 50 / 100 page sizes, collaborator access) had no evidence report behind it and is withdrawn. A 2026-10-10 pass confirmed nothing was reproduced.
+- **Sign-off:** owner decisions given by Rido on 2026-10-13.
 
-The results recorded in requirements §8/§10 and ADR-0003 Amendment 1 are prior claims dated 2026-10-02. Their linked evidence report was absent when this verification began. This pass neither reproduces nor contradicts those claims; treat them as unverified for M1 until the retest below is completed and Rido signs off.
-
-For a safe retest, use a user-controlled Development Mode app and authorized test accounts. Keep the app secret and access/refresh tokens in local secure configuration only. Record only the date, endpoint template and query parameters, HTTP status, result/page counts, and Boolean observations listed below. Do not retain authorization headers, token data, IDs, names, emails, or raw response bodies.
+Recorded in requirements §8/§10 and [ADR-0003 Amendment 3](../adr/0003-provider-interface-and-capabilities.md).
 
 ## S1: ISRC search filter
 
 <a id="s1-isrc-search-filter"></a>
 
-- **Prior claim:** `q=isrc:<ISRC>` works in Development Mode; five of five test ISRCs returned the expected track and `external_ids.isrc` was present. The recorded capability is `isrcSearchMode: 'filter'`.
-- **This pass:** **Unverified**; no live request was made.
-- **Safe retest:** With an authorized Development Mode app and a non-sensitive, known test ISRC, request `GET /v1/search` with `type=track`, `q=isrc:<ISRC>`, and a small `limit`. Record the HTTP status, result count, whether the expected ISRC matched, and whether the result's `external_ids.isrc` field was present. Do not retain track names, IDs, or response bodies.
+- **Owner decision (2026-10-13):** ISRC search is dropped. Do not rely on `q=isrc:`. Spotify `isrcSearchMode` is `'none'` (no ISRC filter). Matching must not depend on Spotify ISRC search: the chain is known ref → metadata for Spotify targets.
+- **Still allowed:** reading `external_ids.isrc` from track objects and exporting it when the API returns it (optional field). Whether the API returns it is not verified.
+- **Affected:** FR-SEARCH-3 (no `isrc:` filter), FR-MIG-2, ADR-0003, ADR-0005, ADR-0009.
+- **Status:** decision, not live-verified.
 
 ## S2: Collaborator access to playlist items
 
 <a id="s2-collaborator-access-to-playlist-items"></a>
 
-- **Prior claim:** a user who collaborates on but does not own a playlist can read its items; the recorded access mode is `owned-or-collaborator`. Prior notes also report 403 for a followed non-collaborative playlist and 404 for an editorial playlist.
-- **This pass:** **Unverified**; no live request was made.
-- **Safe retest:** Using a playlist deliberately shared with a test account as a collaborator (not its owner), request `GET /v1/playlists/{playlist_id}/items` with a small `limit`. Record only status and item count. If practical, separately test a followed non-collaborative playlist to check the recorded 403 behavior. Do not record playlist IDs, titles, owners, collaborators, or item metadata.
+- **Decision (2026-10-13):** testing collaborative-playlist read access is **deferred**; the behavior is **untested**.
+- **Conservative behavior:** owned playlists are readable. For any other playlist, a 403/404 from `/playlists/{id}/items` means not readable (`itemsReadable: false`, `AccessRestrictedError('not-owned')`). Do not rely on the `collaborative` flag.
+- **Retest later (optional):** with a playlist shared with a test account as collaborator, request `GET /v1/playlists/{playlist_id}/items` with a small `limit`; record only status and item count, no IDs or titles.
 
 ## S3: Page-size limits
 
 <a id="s3-page-size-limits"></a>
 
-- **Prior claim:** maximum read page sizes are 50 for `GET /v1/me/playlists`, 50 for `GET /v1/me/tracks`, and 100 for `GET /v1/playlists/{playlist_id}/items`. Requirements also record search `limit` 10 and `limit + offset <= 1000`; those search constraints are outside this S3 page-size check.
-- **This pass:** **Unverified**; no live request was made.
-- **Safe retest:** On the same authorized account, request each read endpoint with a `limit` above its claimed maximum. Use test data with enough records to distinguish server caps from a short collection (at least 51 playlists, 51 liked tracks, and 101 playlist items, as applicable). Record the requested limit, HTTP status, returned item count, and whether the response indicated another page. Do not retain the returned IDs or metadata. A smaller collection cannot establish an endpoint maximum.
+- **Decision (2026-10-13):** use a default page size of **50** for `GET /v1/me/playlists`, `GET /v1/me/tracks` and `GET /v1/playlists/{playlist_id}/items`, without verifying maximum limits. This is a decision, **not a measurement**.
+- Search keeps `limit` ≤ 10 and `limit + offset <= 1000` per the February 2026 changelog (not live-verified).
 
-## S4: Premium detection (unverified)
+## S4: Premium detection
 
 <a id="s4-premium-detection-unverified"></a>
 
-- **Prior claim:** the precise error for an app owner without Premium has not been observed. ADR-0003/0010 record a fallback that treats HTTP 403 as Premium-required only when the error message matches `/premium/i`.
-- **This pass:** **Unverified**, consistent with the prior status; no non-Premium app-owner test was available and no live request was made.
-- **Safe retest:** In a user-controlled test setup where the Spotify Development Mode app owner does not have Premium, run the OAuth flow and the first authenticated identity call (`GET /v1/me`). Record only the endpoint template, HTTP status, a sanitized provider error code if present, and whether the error message matches `/premium/i` (yes/no). Do not retain the message, account identity, plan details, headers, or response body. Do not infer the error from a different account's access failure.
+- **Assumption (2026-10-13):** all users have Premium. No special Premium-detection error handling is required beyond generic 403 handling. The error for a non-Premium app owner was never observed.
+- A `/premium/i` 403 mapping to `premium-required` (ADR-0010) is optional, best-effort only.
 
-## Evidence needed to close verification
+## Closing note
 
-Rido's review needs the safe observations above from an authorized live run. For S1–S3, that requires a user-controlled Development Mode app and suitable test account/data; S2 additionally requires a collaborator test playlist. S4 requires the app owner to be non-Premium during the test. If those conditions cannot be arranged, leave the affected spike unverified rather than infer an outcome. Once results are available, compare them with the prior claims and update requirements §8/§10 and ADR-0003 only where observations contradict them.
+Any future live observation that contradicts these decisions should update requirements §8/§10 and ADR-0003 only where it differs. Record only dates, endpoint templates, HTTP status and counts; never tokens, IDs or response bodies.
