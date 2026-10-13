@@ -50,10 +50,17 @@ export function createPlaylistCommands (resolveProvider: PlaylistProviderResolve
     {
       path: ['playlist', 'list'],
       description: 'List playlists',
-      helpText: 'Usage: sple playlist list [--owned | --followed]',
+      helpText: [
+        'Usage: sple playlist list [--owned | --followed] [--filter <substring|/regex/flags>]',
+        '',
+        '--filter matches playlist names. A value written as /pattern/ or /pattern/flags is a',
+        'regular expression (flags: d g i m s u v y); anything else is a case-insensitive literal',
+        'substring (regex characters are not interpreted).'
+      ].join('\n'),
       options: {
         owned: { type: 'boolean' },
-        followed: { type: 'boolean' }
+        followed: { type: 'boolean' },
+        filter: { type: 'string' }
       },
       run: async context => {
         await runPlaylistList(context, resolveProvider(context))
@@ -78,15 +85,20 @@ async function runPlaylistList (context: CommandContext, provider: Provider): Pr
   const followed = flags.followed === true
   if (owned && followed) throw new UsageError('--owned and --followed cannot be used together')
 
+  const nameMatcher = parseNameFilter(flags.filter)
+
   const filter = owned ? 'owned' : followed ? 'followed' : undefined
   const playlists = await readAllPages(
     provider.capabilities.readPageSize.playlists,
     provider.capabilities.paginationModel,
     async request => await provider.listPlaylists(request, filter)
   )
-  const filtered = filter === undefined
+  const ownershipFiltered = filter === undefined
     ? playlists
     : playlists.filter(playlist => filter === 'owned' ? playlist.owned : !playlist.owned)
+  const filtered = nameMatcher === undefined
+    ? ownershipFiltered
+    : ownershipFiltered.filter(playlist => nameMatcher(playlist.name))
   if (filtered.length === EMPTY_COUNT) {
     context.stderr.write('No playlists.\n')
     if (context.outputMode !== 'json') return
@@ -101,6 +113,26 @@ async function runPlaylistList (context: CommandContext, provider: Provider): Pr
     quietIds: filtered.map(playlist => playlist.id),
     outputOptions: { stdoutIsTTY: context.stdoutIsTTY }
   }))
+}
+
+const REGEX_LITERAL = /^\/(?<pattern>.+)\/(?<flags>[a-z]*)$/v
+
+export function parseNameFilter (value: string | boolean | undefined): ((name: string) => boolean) | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string' || value === '') throw new UsageError('--filter requires a non-empty value')
+  const literal = REGEX_LITERAL.exec(value)
+  const groups = literal?.groups
+  if (groups === undefined) {
+    const needle = value.toLowerCase()
+    return name => name.toLowerCase().includes(needle)
+  }
+  const { pattern = '', flags = '' } = groups
+  try {
+    const regex = new RegExp(pattern, flags.replaceAll(/[gy]/gv, ''))
+    return name => regex.test(name)
+  } catch {
+    throw new UsageError(`Invalid --filter regular expression: ${value}`)
+  }
 }
 
 async function runPlaylistShow (context: CommandContext, provider: Provider): Promise<void> {
