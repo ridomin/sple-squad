@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
-import { mkdir, readFile, readdir, rm } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { PassThrough, Writable } from 'node:stream'
@@ -154,6 +154,17 @@ test('directory exports use slug-id names and protect existing files unless forc
   assert.equal(forced.code, 0)
   const summary = parseRecord(forced.io.stdout.text)
   assert.equal(asArray(summary.files).length, 1)
+})
+
+test('file destinations passed as directories are usage errors that preserve the destination', async () => {
+  const destination = join(testRoot, 'file-destination')
+  await writeFile(destination, 'original destination')
+
+  const { code, io } = await invoke(['export', PLAYLIST_NAME, '-o', `${destination}/`], createProvider())
+  assert.equal(code, 2)
+  assert.equal(io.stdout.text, '')
+  assert.equal(io.stderr.text, `sple: Export destination is not a directory: ${destination}\n`)
+  assert.equal(await readFile(destination, 'utf8'), 'original destination')
 })
 
 test('the --all caller writes an index and records unreadable playlists as skipped', async () => {
