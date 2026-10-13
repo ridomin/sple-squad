@@ -315,6 +315,24 @@ test('empty playlist arguments are usage errors before provider retrieval', asyn
   assert.equal(retrieved, false)
 })
 
+test('whitespace-only playlist arguments are usage errors before provider retrieval', async () => {
+  const provider = createProvider()
+  let retrieved = false
+  const guardedProvider: Provider = {
+    ...provider,
+    getPlaylist: async () => {
+      retrieved = true
+      return await provider.getPlaylist(PLAYLIST_ID)
+    }
+  }
+
+  const { code, io } = await invoke(['export', '   '], guardedProvider)
+  assert.equal(code, 2)
+  assert.equal(io.stdout.text, '')
+  assert.equal(io.stderr.text, 'sple: Playlist arguments must not be empty\n')
+  assert.equal(retrieved, false)
+})
+
 test('ambiguous playlist names fail before creating output targets', async () => {
   const provider = createFakeProvider({
     fixtures: {
