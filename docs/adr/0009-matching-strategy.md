@@ -133,6 +133,8 @@ Matching uses no fuzzy-matching or NLP libraries (like leven, fuzzy-wuzzy, or ja
 
 Accepted. Implemented in M3-5 to M3-6.
 
+Implementation note (#28): the strategy chain and engine live in `src/core/matching/` (`matchTrack`). The metadata step is behind the `MetadataScorer` interface (default: accepts nothing) so the scoring in Amendment 1 §3-4 (#27) plugs in without touching the chain.
+
 ## Amendment 1 (spec review for ports)
 
 - **Date:** 2026-10-07
