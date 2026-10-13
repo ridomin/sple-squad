@@ -7,6 +7,11 @@ import { createSearchCommand } from './commands/search.ts'
 import { registerCommand } from './registry.ts'
 
 registerCommand(createSearchCommand())
+import { createPlaylistCommands, resolvePlaylistProvider } from './commands/playlist.ts'
+
+for (const command of createPlaylistCommands(resolvePlaylistProvider)) {
+  registerCommand(command)
+}
 
 export { parseCommandArguments, parseGlobalArguments } from './args.ts'
 export type {
