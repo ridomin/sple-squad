@@ -1,16 +1,15 @@
 // Spotify capability values for the read/write adapter (ADR-0003 §5).
 //
-// UNVERIFIED (docs/spikes/M1-spotify-spikes.md): `isrcSearchMode: 'filter'`
-// (S1), `playlistItemsAccess: 'owned-or-collaborator'` (S2) and every page
-// size below (S3) are prior claims that no live request has reproduced. They
-// are declared here exactly as ADR-0003 §5 states and are the only values
-// the adapter reads for page limits, so a retest outcome is a one-place change.
+// Owner decisions (docs/spikes/M1-spotify-spikes.md): ISRC search is dropped
+// (`isrcSearchMode: 'none'`, S1) and the playlist-items page size is 50 (S3).
+// `playlistItemsAccess` (S2) is deferred and still the unverified ADR-0003 §5
+// value. These constants are the only values the adapter reads for page limits.
 
 import type { ProviderCapabilities } from '../../core/provider/index.ts'
 
 export const SPOTIFY_MAX_SEARCH_PAGE_SIZE = 10
 export const SPOTIFY_MAX_PLAYLISTS_PAGE_SIZE = 50
-export const SPOTIFY_MAX_PLAYLIST_ITEMS_PAGE_SIZE = 100
+export const SPOTIFY_MAX_PLAYLIST_ITEMS_PAGE_SIZE = 50
 export const SPOTIFY_MAX_LIKED_PAGE_SIZE = 50
 export const SPOTIFY_MAX_TRACKS_PER_REQUEST = 100
 const SPOTIFY_MAX_PLAYLIST_SIZE = 10_000
@@ -31,7 +30,7 @@ export const SPOTIFY_API_CAPABILITIES: ProviderCapabilities = {
   },
   playlistItemsAccess: 'owned-or-collaborator',
   likedSongs: { read: 'exact', write: false },
-  isrcSearchMode: 'filter',
+  isrcSearchMode: 'none',
   searchReturnsDuration: true,
   musicAwareSearch: true,
   canDeletePlaylist: false,

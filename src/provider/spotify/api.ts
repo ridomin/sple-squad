@@ -60,7 +60,6 @@ export type SpotifyApiRequest = (
 /** The `Provider` members this module implements; the rest (`id`, `displayName`, `capabilities`, `auth`) belong to the provider factory. */
 export type SpotifyApiOperations = Omit<Provider, 'id' | 'displayName' | 'capabilities' | 'auth' | 'updatePlaylist'>
 
-const ISRC_PATTERN = /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/v
 const NO_OFFSET = 0
 const MIN_LIMIT = 1
 // Spike S3 (UNVERIFIED, ADR-0003 Amendment 1): search `limit + offset <= 1000`.
@@ -124,13 +123,8 @@ function errorMessage (err: unknown): string {
 
 function trackQueryText (query: TrackQuery): string {
   if (query.kind === 'isrc') {
-    const isrc = query.isrc.replaceAll('-', '').trim().toUpperCase()
-    if (!ISRC_PATTERN.test(isrc)) {
-      throw new UsageError('Not a valid ISRC')
-    }
-    // S1 (UNVERIFIED): assumes Spotify honors the `isrc:` search filter. If it does not,
-    // the search simply returns other or no tracks; the caller (matching engine) verifies the ISRC.
-    return `isrc:${isrc}`
+    // isrcSearchMode is 'none' (owner decision, M1 spike S1): ISRC queries are never sent to Spotify.
+    throw new UsageError('Spotify does not support ISRC search')
   }
   // `album` and `durationMs` are deliberately not sent: the search text is title + first artist
   // (ADR-0003 endpoint table); the matching engine uses those fields to score the returned hits.

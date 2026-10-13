@@ -24,7 +24,7 @@ import { SPOTIFY_API_CAPABILITIES } from './api-capabilities.ts'
 describe('capabilities', () => {
   it('declares the ADR-0003 §5 Spotify values (S1–S3 prior claims, unverified)', () => {
     assert.equal(SPOTIFY_API_CAPABILITIES.maxSearchPageSize, 10)
-    assert.deepEqual(SPOTIFY_API_CAPABILITIES.readPageSize, { playlists: 50, playlistItems: 100, liked: 50 })
+    assert.deepEqual(SPOTIFY_API_CAPABILITIES.readPageSize, { playlists: 50, playlistItems: 50, liked: 50 })
     assert.equal(SPOTIFY_API_CAPABILITIES.maxTracksPerRequest, 100)
   })
 })
@@ -143,21 +143,17 @@ describe('search', () => {
 })
 
 describe('searchTracks', () => {
-  it('sends an isrc: filter query (S1 unverified) and returns hits', async () => {
+  it('sends title plus first artist for metadata queries and returns hits', async () => {
     const { api, calls } = setup(() => json({ tracks: { items: [track()] } }))
-    const hits = await api.searchTracks({ kind: 'isrc', isrc: 'us-rc1-76-07839' }, { limit: 3 })
+    const hits = await api.searchTracks({ kind: 'metadata', title: 'Song', artists: ['A'] }, { limit: 3 })
     const call = at(calls, FIRST_CALL)
     assert.equal(call.operation, 'searchTracks')
-    assert.equal(call.url.searchParams.get('q'), 'isrc:USRC17607839')
+    assert.equal(call.url.searchParams.get('q'), 'Song A')
     assert.equal(call.url.searchParams.get('type'), 'track')
     assert.equal(call.url.searchParams.get('limit'), '3')
     assert.deepEqual(hits.map((h) => h.ref), [TRACK_URI])
     assert.equal(at(hits, FIRST_CALL).track.durationMs, 1234)
-  })
-
-  it('returns no hits without throwing when the isrc: filter finds nothing or is not honored (S1 unverified)', async () => {
-    const { api } = setup(() => json({ tracks: { items: [], total: 0 } }))
-    assert.deepEqual(await api.searchTracks({ kind: 'isrc', isrc: 'USRC17607839' }, { limit: 5 }), [])
+    assert.equal(at(hits, FIRST_CALL).track.isrc, 'USRC17607839')
   })
 
   it('ignores album/durationMs in the query text (scored by the matching engine)', async () => {
@@ -174,10 +170,11 @@ describe('searchTracks', () => {
     assert.equal(at(calls, SECOND_CALL).url.searchParams.get('q'), 'Song')
   })
 
-  it('rejects an invalid ISRC without a request', async () => {
+  it('rejects an ISRC query without a request (isrcSearchMode is none)', async () => {
     const { api, calls } = setup(() => json({}))
-    await assert.rejects(api.searchTracks({ kind: 'isrc', isrc: 'bad" OR' }, { limit: 1 }), UsageError)
+    await assert.rejects(api.searchTracks({ kind: 'isrc', isrc: 'USRC17607839' }, { limit: 1 }), UsageError)
     assert.equal(calls.length, 0)
+    assert.equal(SPOTIFY_API_CAPABILITIES.isrcSearchMode, 'none')
   })
 
   it('clamps searchTracks limit above the declared search cap and sends limit=10', async () => {
@@ -321,13 +318,13 @@ describe('getPlaylist', () => {
 describe('getPlaylistTracks', () => {
   it('requests /items with the page size cap and paginates', async () => {
     const { api, calls } = setup(() => json({ items: [{ added_at: 'a', item: track() }], total: 250, next: 'n' }))
-    const page = await api.getPlaylistTracks(PL_ID, { limit: 100, offset: 100 })
+    const page = await api.getPlaylistTracks(PL_ID, { limit: 50, offset: 50 })
     const call = at(calls, FIRST_CALL)
     assert.equal(call.operation, 'getPlaylistTracks')
     assert.equal(call.url.pathname, `/v1/playlists/${PL_ID}/items`)
-    assert.equal(call.url.searchParams.get('limit'), '100')
-    assert.equal(call.url.searchParams.get('offset'), '100')
-    assert.deepEqual(page.next, { offset: 101 })
+    assert.equal(call.url.searchParams.get('limit'), '50')
+    assert.equal(call.url.searchParams.get('offset'), '50')
+    assert.deepEqual(page.next, { offset: 51 })
     assert.equal(page.total, 250)
   })
 
@@ -340,11 +337,11 @@ describe('getPlaylistTracks', () => {
     const { api, calls } = setup(() => json({
       items: [{ added_at: 'a', item: track() }],
       total: 250,
-      next: 'https://api.spotify.com/v1/playlists/items?offset=100&limit=100'
+      next: 'https://api.spotify.com/v1/playlists/items?offset=50&limit=50'
     }))
     const page = await api.getPlaylistTracks(PL_ID, { limit: 200, offset: 0 })
     assert.equal(calls.length, 1)
-    assert.equal(at(calls, FIRST_CALL).url.searchParams.get('limit'), '100')
+    assert.equal(at(calls, FIRST_CALL).url.searchParams.get('limit'), '50')
     assert.equal(page.items.length, 1)
     assert.equal(page.total, 250)
     assert.deepEqual(page.next, { offset: 1 })

@@ -81,20 +81,20 @@ describe("Spotify page cap boundaries and clamped limits", () => {
     const { api, calls } = setup(() => json({
       items: [{ added_at: "a", item: track() }],
       total: 250,
-      next: "https://api.spotify.com/v1/playlists/items?offset=100&limit=100"
+      next: "https://api.spotify.com/v1/playlists/items?offset=50&limit=50"
     }))
-    // Over cap (200 -> 100)
+    // Over cap (200 -> 50)
     const over = await api.getPlaylistTracks(PL_ID, { limit: 200 })
-    assert.equal(at(calls, 0).url.searchParams.get("limit"), "100")
+    assert.equal(at(calls, 0).url.searchParams.get("limit"), "50")
     assert.deepEqual(over.next, { offset: 1 })
 
-    // Boundary at cap (100 -> 100)
-    await api.getPlaylistTracks(PL_ID, { limit: 100 })
-    assert.equal(at(calls, 1).url.searchParams.get("limit"), "100")
-
-    // Below cap (50 -> 50)
+    // Boundary at cap (50 -> 50)
     await api.getPlaylistTracks(PL_ID, { limit: 50 })
-    assert.equal(at(calls, 2).url.searchParams.get("limit"), "50")
+    assert.equal(at(calls, 1).url.searchParams.get("limit"), "50")
+
+    // Below cap (25 -> 25)
+    await api.getPlaylistTracks(PL_ID, { limit: 25 })
+    assert.equal(at(calls, 2).url.searchParams.get("limit"), "25")
   })
 
   it("getLikedTracks: clamps over-cap, passes cap boundary, and passes below cap", async () => {
@@ -169,10 +169,10 @@ describe("pagination traversal without silent truncation", () => {
     }
 
     assert.equal(collected.length, 250)
-    assert.equal(calls.length, 3)
-    assert.equal(at(calls, 0).url.searchParams.get("limit"), "100")
-    assert.equal(at(calls, 1).url.searchParams.get("limit"), "100")
-    assert.equal(at(calls, 2).url.searchParams.get("limit"), "100")
+    assert.equal(calls.length, 5)
+    for (let i = 0; i < 5; i += 1) {
+      assert.equal(at(calls, i).url.searchParams.get("limit"), "50")
+    }
     assert.equal(collected[0], `spotify:track:T${"0".repeat(21)}`)
     assert.equal(collected[249], `spotify:track:T${"0".repeat(18)}249`)
   })
