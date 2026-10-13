@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { PassThrough, Writable } from 'node:stream'
 import {
   createAuthLogoutCommand,
@@ -10,6 +11,7 @@ import {
   type CliIO
 } from '../index.ts'
 import { createFakeProvider } from '../../core/provider/fake/index.ts'
+import { AuthRequiredError, NotFoundError } from '../../core/provider/errors.ts'
 import type { Provider } from '../../core/provider/index.ts'
 
 class CaptureWritable extends Writable {
@@ -99,7 +101,78 @@ describe('sple auth status', () => {
   })
 })
 
+const NOW = new Date('2026-01-01T12:00:00.000Z')
+
+async function humanStatus (expiresAt: string | undefined): Promise<{ stdout: string, stderr: string }> {
+  const provider = createProvider('spotify', 'Spotify')
+  provider.auth.status = async () => await Promise.resolve({
+    loggedIn: true,
+    user: { id: 'u1', displayName: 'Ada' },
+    scopes: ['a', 'b'],
+    ...(expiresAt === undefined ? {} : { expiresAt })
+  })
+  const io = createIO()
+  const commands = [createAuthStatusCommand(() => [provider], () => NOW)]
+  assert.equal(await runCli(['auth', 'status'], { commands, io, processEnv: {} }), EXIT_CODES.success)
+  return { stdout: io.stdout.text, stderr: io.stderr.text }
+}
+
+describe('sple auth status human output', () => {
+  it('marks an expired token and warns on stderr', async () => {
+    const out = await humanStatus('2026-01-01T12:00:00.000Z')
+    assert.equal(out.stdout, [
+      'Spotify (spotify): logged in',
+      '  User: Ada (u1)',
+      '  Scopes: a b',
+      '  Token expires: 2026-01-01T12:00:00.000Z (expired)',
+      ''
+    ].join('\n'))
+    assert.equal(out.stderr, 'Warning: Spotify access token has expired; it will be refreshed on next use\n')
+  })
+
+  it('does not mark a valid token and warns when expiring within 5 minutes', async () => {
+    const valid = await humanStatus('2026-01-01T13:00:00.000Z')
+    assert.match(valid.stdout, / {2}Token expires: 2026-01-01T13:00:00\.000Z\n$/v)
+    assert.doesNotMatch(valid.stdout, /expired/v)
+    assert.equal(valid.stderr, '')
+
+    const soon = await humanStatus('2026-01-01T12:04:00.000Z')
+    assert.doesNotMatch(soon.stdout, /expired/v)
+    assert.equal(soon.stderr, 'Warning: Spotify access token expires in less than 5 minutes\n')
+  })
+
+  it('prints not logged in with no scopes and no expiry line', async () => {
+    const io = createIO()
+    const commands = [createAuthStatusCommand(() => [createProvider('spotify', 'Spotify')], () => NOW)]
+    await runCli(['auth', 'status'], { commands, io, processEnv: {} })
+    assert.equal(io.stdout.text, 'Spotify (spotify): not logged in\n  Scopes: (none)\n')
+  })
+})
+
 describe('sple auth logout', () => {
+  it('attempts every provider in order and exits with the first failure', async () => {
+    const calls: string[] = []
+    const make = (id: Provider['id'], name: string, behavior: 'ok' | 'notfound' | 'auth', delay: number): Provider => {
+      const provider = createProvider(id, name)
+      provider.auth.logout = async () => {
+        await sleep(delay)
+        calls.push(name)
+        if (behavior === 'notfound') throw new NotFoundError('first failure')
+        if (behavior === 'auth') throw new AuthRequiredError('second failure')
+        return { revoked: true, deletedData: ['t'] }
+      }
+      return provider
+    }
+    const providers = [make('spotify', 'A', 'notfound', 20), make('fake', 'B', 'auth', 1), make('fake', 'C', 'ok', 1)]
+    const io = createIO()
+    const code = await runCli(['auth', 'logout', '--all'], { commands: createCommands(providers), io, processEnv: {} })
+    assert.equal(code, EXIT_CODES.notFound)
+    assert.deepEqual(calls, ['A', 'B', 'C'])
+    assert.equal(io.stdout.text, 'Revoked access with C\nDeleted: t\n')
+    assert.match(io.stderr.text, /first failure/v)
+    assert.doesNotMatch(io.stderr.text, /second failure/v)
+  })
+
   it('logs out the selected provider, states non-revocation, and preserves provider notices', async () => {
     let logoutCalls = 0
     const provider = createFakeProvider({ displayName: 'Spotify' })
@@ -119,8 +192,13 @@ describe('sple auth logout', () => {
       processEnv: {}
     }), EXIT_CODES.success)
     assert.equal(logoutCalls, 1)
-    assert.equal(io.stdout.text, 'Spotify: Local credentials removed; access was not revoked. Removed: Spotify tokens.\n')
-    assert.match(io.stderr.text, /Spotify does not support token revocation/v)
+    assert.equal(io.stdout.text, [
+      'Logged out from Spotify',
+      'Deleted: Spotify tokens',
+      'Spotify does not support token revocation. Revoke access in account settings.',
+      ''
+    ].join('\n'))
+    assert.equal(io.stderr.text, '')
   })
 
   it('logs out all registered providers, supports quiet mode, and rejects conflicting flags', async () => {

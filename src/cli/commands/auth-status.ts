@@ -2,19 +2,15 @@ import type { AuthStatus, Provider } from '../../core/provider/index.ts'
 import { UsageError } from '../../core/provider/errors.ts'
 import { getRegisteredProviders } from '../../provider/registry.ts'
 import type { CommandContext, CommandDefinition } from '../args.ts'
-import { formatOutput, type OutputColumn } from '../output.ts'
+import { formatOutput } from '../output.ts'
 import { registerCommand } from '../registry.ts'
 
 const commandPath = ['auth', 'status']
 const NO_POSITIONAL_ARGUMENTS = 0
-const STATUS_COLUMNS: OutputColumn[] = [
-  { key: 'provider', label: 'provider' },
-  { key: 'loggedIn', label: 'logged in' },
-  { key: 'user', label: 'user', flexible: true },
-  { key: 'userId', label: 'user id' },
-  { key: 'scopes', label: 'scopes', flexible: true },
-  { key: 'expiresAt', label: 'expires' }
-]
+const NO_SCOPES = 0
+const MS_PER_MINUTE = 60_000
+const EXPIRY_WARNING_MINUTES = 5
+const EXPIRY_WARNING_MS = EXPIRY_WARNING_MINUTES * MS_PER_MINUTE
 
 export interface AuthStatusOutput {
   providers: Array<AuthStatus & {
@@ -26,7 +22,8 @@ export interface AuthStatusOutput {
 export type ProviderResolver = (context: CommandContext) => readonly Provider[]
 
 export function createAuthStatusCommand (
-  providers: ProviderResolver = context => getRegisteredProviders({ config: context.config })
+  providers: ProviderResolver = context => getRegisteredProviders({ config: context.config }),
+  now: () => Date = () => new Date()
 ): CommandDefinition {
   return {
     path: commandPath,
@@ -46,23 +43,18 @@ export function createAuthStatusCommand (
         ...await provider.auth.status()
       })))
       const output: AuthStatusOutput = { providers: statuses }
-      const rows = statuses.map(status => ({
-        provider: status.id,
-        loggedIn: status.loggedIn,
-        user: status.user?.displayName ?? '',
-        userId: status.user?.id ?? '',
-        scopes: status.scopes.join(' '),
-        expiresAt: status.expiresAt
-      }))
-      const quietIds = statuses.filter(status => status.loggedIn).map(status => status.id)
-      context.stdout.write(formatOutput({
-        mode: context.outputMode,
-        value: output,
-        columns: STATUS_COLUMNS,
-        rows,
-        quietIds,
-        outputOptions: { stdoutIsTTY: context.stdoutIsTTY }
-      }))
+      if (context.outputMode === 'json' || context.outputMode === 'quiet') {
+        const quietIds = statuses.filter(status => status.loggedIn).map(status => status.id)
+        context.stdout.write(formatOutput({ mode: context.outputMode, value: output, quietIds }))
+        return
+      }
+      const nowMs = now().getTime()
+      const lines: string[] = []
+      for (const [index, status] of statuses.entries()) {
+        const displayName = selected[index]?.displayName ?? status.id
+        lines.push(...describeStatus(displayName, status, nowMs, context))
+      }
+      context.stdout.write(`${lines.join('\n')}\n`)
     }
   }
 }
@@ -76,6 +68,31 @@ export function selectProviders (
   if (provider !== undefined) return [provider]
   const registered = providers.map(candidate => candidate.id).join(', ')
   throw new UsageError(`Unknown provider: ${context.provider}. Registered providers: ${registered}`)
+}
+
+function describeStatus (
+  displayName: string,
+  status: AuthStatus & { id: string },
+  nowMs: number,
+  context: CommandContext
+): string[] {
+  const lines = [`${displayName} (${status.id}): ${status.loggedIn ? 'logged in' : 'not logged in'}`]
+  if (status.user !== undefined) {
+    const name = status.user.displayName === undefined ? '' : `${status.user.displayName} `
+    lines.push(`  User: ${name}(${status.user.id})`)
+  }
+  lines.push(`  Scopes: ${status.scopes.length === NO_SCOPES ? '(none)' : status.scopes.join(' ')}`)
+  if (status.expiresAt !== undefined) {
+    const expiresMs = Date.parse(status.expiresAt)
+    const expired = expiresMs <= nowMs
+    lines.push(`  Token expires: ${status.expiresAt}${expired ? ' (expired)' : ''}`)
+    if (expired) {
+      context.stderr.write(`Warning: ${displayName} access token has expired; it will be refreshed on next use\n`)
+    } else if (expiresMs - nowMs < EXPIRY_WARNING_MS) {
+      context.stderr.write(`Warning: ${displayName} access token expires in less than 5 minutes\n`)
+    }
+  }
+  return lines
 }
 
 registerCommand(createAuthStatusCommand())
