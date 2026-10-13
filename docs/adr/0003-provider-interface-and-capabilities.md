@@ -329,6 +329,7 @@ Login requests the union of the table: `playlist-read-private playlist-read-coll
 | `getPlaylist`, `getPlaylistTracks` | `playlist-read-private` |
 | `getLikedTracks` | `user-library-read` |
 | `createPlaylist` | public: `playlist-modify-public`; private: `playlist-modify-private`; collaborative: both |
+| `updatePlaylist` | `playlist-modify-public`, `playlist-modify-private` (current visibility is not known before the call) |
 | `removePlaylist` | `playlist-modify-public`, `playlist-modify-private` (visibility is not known before the call) |
 | `populatePlaylist` | `playlist-modify-public`, `playlist-modify-private` |
 | `searchTracks` | none (login still required) |
@@ -344,6 +345,7 @@ Login requests the union of the table: `playlist-read-private playlist-read-coll
 | `getPlaylistTracks` | `GET /v1/playlists/{id}/items?limit=(≤100)&offset=`; items with a `null` track, `is_local: true`, or `type: 'episode'` are dropped |
 | `getLikedTracks` | `GET /v1/me/tracks?limit=(≤50)&offset=`; `addedAt` from `added_at` |
 | `createPlaylist` | `POST /v1/me/playlists` `{ name, description, public, collaborative }`; public + collaborative is a `UsageError` |
+| `updatePlaylist` | `PUT /v1/playlists/{id}` with only the supplied `name`/`description`/`public`; the empty response is followed by `GET /v1/playlists/{id}` for the summary |
 | `removePlaylist` | `DELETE /v1/me/library?uris=spotify:playlist:<id>` → `{ action: 'unfollowed' }` |
 | `populatePlaylist` | `POST /v1/playlists/{id}/items` with body `{ "uris": [...] }` (201 + `snapshot_id`), at most 100 per request, in order. Refs that are not `spotify:track:<id>` go to `failed` (`Not a Spotify track URI`) without a request. Auth, quota and rate-limit errors propagate; any other error marks every ref in that batch failed with the error message and the next batch runs. `skipExisting` first pages through `GET /v1/playlists/{id}/items` and leaves out refs already present (neither added nor failed). |
 

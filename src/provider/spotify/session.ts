@@ -60,6 +60,7 @@ export type SpotifyScopeOperation =
   | 'getPlaylistTracks'
   | 'getLikedTracks'
   | { operation: 'createPlaylist', public: boolean, collaborative?: boolean }
+  | 'updatePlaylist'
   | 'removePlaylist'
   | 'populatePlaylist'
   | 'searchTracks'
@@ -72,6 +73,7 @@ const SPOTIFY_SCOPES_BY_OPERATION: Record<Exclude<SpotifyScopeOperation, { opera
   getPlaylist: ['playlist-read-private'],
   getPlaylistTracks: ['playlist-read-private'],
   getLikedTracks: ['user-library-read'],
+  updatePlaylist: PLAYLIST_WRITE_SCOPES,
   removePlaylist: PLAYLIST_WRITE_SCOPES,
   populatePlaylist: PLAYLIST_WRITE_SCOPES,
   searchTracks: []
