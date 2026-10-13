@@ -174,15 +174,14 @@ describe('HttpClient: 429 rate limiting', () => {
     const client = new HttpClient({
       loadToken: async () => await Promise.resolve(sampleToken()),
       now: clock.now,
-      sleep: clock.sleep,
-      maxRetries: 2
+      sleep: clock.sleep
     })
 
     await assert.rejects(
       async () => await client.request('GET', `${server.url}/x`),
       (err: unknown) => err instanceof RateLimitError
     )
-    assert.equal(clock.sleptMs.length, 2)
+    assert.equal(clock.sleptMs.length, 3)
 
     await server.close()
   })
@@ -196,7 +195,6 @@ describe('HttpClient: 5xx and network errors', () => {
       loadToken: async () => await Promise.resolve(sampleToken()),
       now: clock.now,
       sleep: clock.sleep,
-      maxRetries: 3,
       baseDelayMs: 100,
       random: () => 0.5
     })
@@ -271,13 +269,13 @@ describe('HttpClient: 5xx and network errors', () => {
       loadToken: async () => await Promise.resolve(sampleToken()),
       now: clock.now,
       sleep: clock.sleep,
-      maxRetries: 2
+      maxRetries: 3
     })
 
     await assert.rejects(
       async () => await client.request('GET', `${deadUrl}/x`)
     )
-    assert.equal(clock.sleptMs.length, 2)
+    assert.equal(clock.sleptMs.length, 3)
   })
 })
 
