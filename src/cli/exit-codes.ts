@@ -8,6 +8,7 @@ import {
   UsageError as ProviderUsageError
 } from '../core/provider/errors.ts'
 import { UsageError as ConfigUsageError } from '../core/config/config.ts'
+import { ExportTargetError } from '../core/export/file-output.ts'
 
 export const EXIT_CODES = {
   // eslint-disable-next-line @typescript-eslint/no-magic-numbers -- Codes are the public CLI contract.
@@ -54,7 +55,11 @@ export interface ErrorOutput {
 
 export function getExitCode (error: unknown): number {
   if (error instanceof ProviderError) return error.exitCode
-  if (error instanceof ConfigUsageError || error instanceof ProviderUsageError) {
+  if (
+    error instanceof ConfigUsageError ||
+    error instanceof ProviderUsageError ||
+    error instanceof ExportTargetError
+  ) {
     return EXIT_CODES.usage
   }
   if (error instanceof Error && 'exitCode' in error) {
