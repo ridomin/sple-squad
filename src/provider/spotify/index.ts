@@ -8,3 +8,5 @@ export { getSpotifyAuthStatus, logoutSpotify, requiredSpotifyScopes, requireSpot
 export type { SpotifyAuthStatus, SpotifyScopeOperation, SpotifySessionOptions } from './session.ts'
 export { refreshSpotifyToken } from './oauth.ts'
 export type { RefreshSpotifyTokenOptions } from './oauth.ts'
+export { createSpotifyProvider } from './provider.ts'
+export type { CreateSpotifyProviderOptions } from './provider.ts'
