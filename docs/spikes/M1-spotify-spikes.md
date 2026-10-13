@@ -1,103 +1,43 @@
-# M1 Spotify API spikes — verification status
+# M1 Spotify API spikes (S1–S4)
 
-**Status (2026-10-10): all four checks are unverified.** No live Spotify
-requests were made for this report. Prior statements in the requirements and
-ADRs are recorded below as prior claims, not as evidence reproduced in this
-verification cycle. No requirements or ADR changes are warranted without
-contradictory observed evidence. Rido has reviewed and signed off on this
-report as written; that sign-off does not verify S1–S4 or approve the M1
-implementation.
+- **Status date:** 2026-10-13
+- **Status:** S1–S4 are closed by **owner decisions and assumptions** (Rido), so M1 can complete without live spike verification.
+- **No live results are claimed.** None of S1–S4 was run against the live Spotify API. Earlier text that recorded "Resolved 2026-10-02" results (5 of 5 ISRCs, 50 / 50 / 100 page sizes, collaborator access) had no evidence report behind it and is withdrawn. A 2026-10-10 pass confirmed nothing was reproduced.
+- **Sign-off:** owner decisions given by Rido on 2026-10-13.
 
-## Evidence boundary
+Recorded in requirements §8/§10 and [ADR-0003 Amendment 3](../adr/0003-provider-interface-and-capabilities.md).
 
-This report records the current verification status and a safe retest plan; it
-does not claim that any Spotify behavior was observed. In particular, the
-previously documented dated resolutions for S1–S3 are not treated as verified
-by this report: the referenced report was absent, and no live requests were
-made now.
+## S1: ISRC search filter
 
-Retests are deferred until implementation and an authorized authenticated test
-account and data are available. Do not include credentials, tokens, account or
-playlist/track identifiers, ISRC values, account/person names or other personal
-data, or raw request/response bodies in the report. Record only the sanitized
-fields listed in the plans below; redact authorization headers and query
-values that identify a person or resource.
+<a id="s1-isrc-search-filter"></a>
 
-## S1 ISRC search filter
+- **Owner decision (2026-10-13):** ISRC search is dropped. Do not rely on `q=isrc:`. Spotify `isrcSearchMode` is `'none'` (no ISRC filter). Matching must not depend on Spotify ISRC search: the chain is known ref → metadata for Spotify targets.
+- **Still allowed:** reading `external_ids.isrc` from track objects and exporting it when the API returns it (optional field). Whether the API returns it is not verified.
+- **Affected:** FR-SEARCH-3 (no `isrc:` filter), FR-MIG-2, ADR-0003, ADR-0005, ADR-0009.
+- **Status:** decision, not live-verified.
 
-**Status: unverified.** No live search request was made. S1 was explicitly
-deferred until implementation.
+## S2: Collaborator access to playlist items
 
-**Prior claim:** Requirements §8 and §10 and ADR-0003 Amendment 1 state that
-the `isrc:` search filter worked and set `isrcSearchMode` to `'filter'`.
-Those statements remain historical, unverified claims here; this report does
-not reproduce their reported observations.
+<a id="s2-collaborator-access-to-playlist-items"></a>
 
-**Retest plan:** Once search is implemented, use an authorized test app and a
-small, approved test corpus. Compare an ISRC-filtered search with the expected
-test outcome and inspect only whether the result includes the ISRC field.
-Record the date, endpoint, filter mode, HTTP status, result count, and whether
-the expected result/ISRC field was present. Do not record the actual ISRC,
-query value, track metadata, identifiers, or response body.
+- **Decision (2026-10-13):** testing collaborative-playlist read access is **deferred**; the behavior is **untested**.
+- **Conservative behavior:** owned playlists are readable. For any other playlist, a 403/404 from `/playlists/{id}/items` means not readable (`itemsReadable: false`, `AccessRestrictedError('not-owned')`). Do not rely on the `collaborative` flag.
+- **Retest later (optional):** with a playlist shared with a test account as collaborator, request `GET /v1/playlists/{playlist_id}/items` with a small `limit`; record only status and item count, no IDs or titles.
 
-## S2 Collaborator access to playlist items
+## S3: Page-size limits
 
-**Status: unverified.** No live playlist request was made. Collaborator access
-testing is explicitly deferred until implementation.
+<a id="s3-page-size-limits"></a>
 
-**Prior claim:** Requirements §8 and §10 and ADR-0003 Amendment 1 state that a
-non-owner collaborator can read playlist items and describe access outcomes
-for other playlist types. These remain historical, unverified claims; this
-report does not reproduce them.
+- **Decision (2026-10-13):** use a default page size of **50** for `GET /v1/me/playlists`, `GET /v1/me/tracks` and `GET /v1/playlists/{playlist_id}/items`, without verifying maximum limits. This is a decision, **not a measurement**.
+- Search keeps `limit` ≤ 10 and `limit + offset <= 1000` per the February 2026 changelog (not live-verified).
 
-**Retest plan:** Once playlist reads are implemented, test with an authorized
-Development Mode app and test playlists whose owners have consented to the
-check. Include an owned control and a collaborator/non-owner case; test any
-other access cases only when authorized data is available. Record the date,
-endpoint, ownership relation as a boolean, collaboration flag as a boolean,
-HTTP status, whether an `items` field was present, and item count if needed.
-Do not record playlist IDs, owner/account identifiers, names, item metadata,
-or response bodies.
+## S4: Premium detection
 
-## S3 Page-size limits
+<a id="s4-premium-detection-unverified"></a>
 
-**Status: unverified.** No live pagination request was made. Retesting is
-pending an authenticated test account and suitable test data.
+- **Assumption (2026-10-13):** all users have Premium. No special Premium-detection error handling is required beyond generic 403 handling. The error for a non-Premium app owner was never observed.
+- A `/premium/i` 403 mapping to `premium-required` (ADR-0010) is optional, best-effort only.
 
-**Prior claim:** Requirements §8 and §10 and ADR-0003 §5 and Amendment 1 state
-page-size limits for playlist listing, liked tracks, and playlist items, as
-well as search pagination constraints. These are prior claims only; their
-limits and the associated performance conclusion have not been reproduced in
-this verification cycle.
+## Closing note
 
-**Retest plan:** With an authorized authenticated account and suitable test
-data, probe each relevant endpoint's accepted page-size boundary and verify
-pagination behavior at and around that boundary. Record the date, endpoint,
-requested limit, HTTP status, accepted/rejected outcome, returned item count,
-and whether another page is indicated. For search, record the requested
-limit/offset and accepted/rejected outcome. Do not record resource IDs, item
-metadata, account details, or response bodies.
-
-## S4 Premium detection unverified
-
-**Status: unverified.** No login or API request for a non-Premium app owner was
-made. Testing the non-Premium case is explicitly deferred.
-
-**Prior claim:** Requirements §8 and §10 and ADR-0003 Amendment 1 already
-label the exact non-Premium error as unverified and propose a fallback
-classification based on a 403 message containing “premium”. This report
-confirms no such behavior; the fallback is not validated evidence.
-
-**Retest plan:** When a non-Premium test app owner and authorized test setup
-are available, determine whether the failure occurs during login/token
-exchange or on the first API call. Record only the stage, endpoint category,
-HTTP status, sanitized provider error code/category if present, and whether a
-case-insensitive Premium keyword was present (true/false). Do not record the
-account's identity or subscription details, credentials, tokens, full error
-text, or response body.
-
-## Sign-off
-
-Rido's review and sign-off on this report are complete. These unverified
-checks must not be treated as reproduced evidence or as approval of the M1
-implementation.
+Any future live observation that contradicts these decisions should update requirements §8/§10 and ADR-0003 only where it differs. Record only dates, endpoint templates, HTTP status and counts; never tokens, IDs or response bodies.
