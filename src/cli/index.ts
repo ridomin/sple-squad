@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { startCli } from './framework.ts'
+import './commands/auth-login.ts'
 
 export { parseCommandArguments, parseGlobalArguments } from './args.ts'
 export type {
@@ -38,6 +39,7 @@ export { parsePlaylistStdin, readStdin, resolvePlaylistArguments } from './stdin
 export { clearProgressIndicators, ProgressIndicator } from './progress.ts'
 export { configureLogging, createLogger, redactSecrets } from './logger.ts'
 export { getRegisteredCommands, registerCommand } from './registry.ts'
+export { createAuthLoginCommand } from './commands/auth-login.ts'
 export { registerSensitiveValue } from '../core/security/secrets.ts'
 export { writeCliMessage } from './messages.ts'
 export type { MessageKind } from './messages.ts'
