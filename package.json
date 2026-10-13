@@ -5,7 +5,7 @@
   "description": "Command-line tool for managing music-streaming playlists (Spotify first, provider-extensible).",
   "type": "module",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   },
   "bin": {
     "sple": "dist/cli/index.js"
@@ -26,10 +26,14 @@
     "lint:fix": "eslint . --fix"
   },
   "devDependencies": {
+    "@types/debug": "^4.1.13",
     "@types/node": "^22.9.0",
     "ajv": "^8.20.0",
     "eslint": "^10.12.0",
     "eslint-config-love": "^158.0.0",
     "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "debug": "^4.4.3"
   }
 }
