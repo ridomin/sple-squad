@@ -60,6 +60,17 @@ describe('populatePlaylist', () => {
     assert.deepEqual(bodyUris(at(calls, calls.length - 1).body), [TRACK_URI])
   })
 
+  it('skipExisting drops unavailable items in the scan, compares canonical ids and submits each track once', async () => {
+    const present = refs(1)[0] ?? ''
+    const { api, calls } = setup((call) => call.method === 'POST'
+      ? json({}, HTTP_CREATED)
+      : json({ items: [{ item: { name: 'unavailable' } }, null, { item: track(present.slice('spotify:track:'.length), { uri: undefined }) }] }))
+    const input = [present, TRACK_URI, TRACK_URI, present]
+    const result = await api.populatePlaylist(PL_ID, input, { skipExisting: true })
+    assert.deepEqual(result, { added: [TRACK_URI], failed: [] })
+    assert.deepEqual(bodyUris(at(calls, calls.length - 1).body), [TRACK_URI])
+  })
+
   it('rejects a bad playlist ref', async () => {
     const { api } = setup(() => json({}))
     await assert.rejects(api.populatePlaylist('bad', refs(1), { skipExisting: false }), NotFoundError)

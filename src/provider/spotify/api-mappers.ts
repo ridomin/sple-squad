@@ -115,29 +115,17 @@ function artistNames (value: unknown): string[] {
   })
 }
 
-function trackUri (track: Json): string {
+function trackUri (track: Json): string | null {
   const id = str(track.id)
   const uri = str(track.uri) ?? (id === undefined ? undefined : `spotify:track:${id}`)
-  if (uri === undefined || parseTrackRef(uri) === null) {
-    throw malformed('track has no usable id or uri')
-  }
-  return uri
+  return uri === undefined ? null : parseTrackRef(uri)
 }
 
 function isUnsupportedItem (track: Json): boolean {
   return (track.type !== undefined && track.type !== 'track') || track.is_local === true
 }
 
-/** Maps a Spotify track object; returns `null` for anything that is not a usable track (null, episode, local file). */
-export function mapTrack (value: unknown, addedAt?: string): CanonicalTrack | null {
-  if (value === null || value === undefined) {
-    return null
-  }
-  const track = requireObject(value, 'track')
-  if (isUnsupportedItem(track)) {
-    return null
-  }
-  const uri = trackUri(track)
+function buildTrack (track: Json, uri: string, addedAt: string | undefined): CanonicalTrack {
   const artists = artistNames(track.artists)
   const album = isObject(track.album) ? nonEmptyString(track.album.name) : undefined
   const durationMs = num(track.duration_ms)
@@ -153,17 +141,40 @@ export function mapTrack (value: unknown, addedAt?: string): CanonicalTrack | nu
   }
 }
 
-/** Maps a `{ added_at, item | track }` wrapper (playlist items use `item` since the Feb 2026 change; liked tracks use `track`). */
+/**
+ * Maps a Spotify track object; returns `null` for anything that is not a usable
+ * track (null, episode, local file). With `dropUnusable`, a non-object or a
+ * track without a usable id/uri is dropped too (unavailable items in playlists
+ * and Liked Songs must not fail the whole page); otherwise it is malformed.
+ */
+export function mapTrack (value: unknown, addedAt?: string, dropUnusable = false): CanonicalTrack | null {
+  if (value === null || value === undefined) {
+    return null
+  }
+  if (dropUnusable && !isObject(value)) {
+    return null
+  }
+  const track = requireObject(value, 'track')
+  const uri = isUnsupportedItem(track) ? null : trackUri(track)
+  if (uri === null) {
+    if (dropUnusable || isUnsupportedItem(track)) {
+      return null
+    }
+    throw malformed('track has no usable id or uri')
+  }
+  return buildTrack(track, uri, addedAt)
+}
+
+/** Maps a `{ added_at, item | track }` wrapper; null, unsupported and unusable entries are dropped, never thrown (ADR-0003 §3 endpoint table). Playlist items use `item` since the Feb 2026 change; liked tracks use `track`. */
 export function mapTrackWrapper (value: unknown): CanonicalTrack | null {
   if (value === null || value === undefined) {
     return null
   }
-  const wrapper = requireObject(value, 'item')
-  if (wrapper.is_local === true) {
+  if (!isObject(value) || value.is_local === true) {
     return null
   }
-  const inner = wrapper.item ?? wrapper.track
-  return mapTrack(inner, str(wrapper.added_at))
+  const inner = value.item ?? value.track
+  return mapTrack(inner, str(value.added_at), true)
 }
 
 function readOwner (value: unknown): { id: string, displayName?: string } {
@@ -205,7 +216,7 @@ export function mapPlaylist (value: unknown, currentUserId: string, ownedOverrid
     ...opt('description', nonEmptyString(playlist.description)),
     owner,
     owned,
-    // ADR-0003 Amendment 2: a non-owned playlist is readable when the response carries an `items` key.
+    // ADR-0003 Amendment 2 heuristic (spike S2, UNVERIFIED): a non-owned playlist is treated as readable when the response carries an `items` key.
     itemsReadable: owned || isObject(playlist.items),
     ...opt('trackCount', playlistTrackCount(playlist)),
     ...opt('public', typeof playlist.public === 'boolean' ? playlist.public : undefined),

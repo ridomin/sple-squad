@@ -1,3 +1,6 @@
+// Page limits above the declared caps and search `limit + offset > 1000` throw UsageError.
+// The 100-per-request write batch and the scan page size are implementation assumptions
+// (ADR-0003 §5 values, spike S3 unverified), not live-verified Spotify limits.
 // Spotify Web API read/write operations behind the `Provider` interface
 // (ADR-0003 §3, "Spotify endpoints used"). This module is transport-agnostic:
 // it receives a `request` function that already owns the token, scope checks
@@ -59,8 +62,26 @@ export type SpotifyApiOperations = Omit<Provider, 'id' | 'displayName' | 'capabi
 const ISRC_PATTERN = /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/v
 const NO_OFFSET = 0
 const MIN_LIMIT = 1
+// Spike S3 (UNVERIFIED, ADR-0003 Amendment 1): search `limit + offset <= 1000`.
+const SEARCH_WINDOW_LIMIT = 1000
+// Implementation choice: the page size used when scanning existing items for `skipExisting`.
+const SCAN_PAGE_SIZE = SPOTIFY_MAX_PLAYLIST_ITEMS_PAGE_SIZE
 
-function clampLimit (page: PageRequest, max: number): { limit: number, offset: number } {
+function checkCaps (limit: number, offset: number, max: number, searchWindow: boolean): void {
+  if (limit > max) {
+    throw new UsageError(`Page limit ${limit} exceeds the maximum of ${max}`)
+  }
+  if (searchWindow && limit + offset > SEARCH_WINDOW_LIMIT) {
+    throw new UsageError(`Search limit + offset must not exceed ${SEARCH_WINDOW_LIMIT}`)
+  }
+}
+
+/**
+ * Validates paging input. Callers size pages from `capabilities`, so a limit
+ * above the declared cap is a caller error and fails clearly instead of being
+ * silently truncated into an incomplete result.
+ */
+function checkPage (page: PageRequest, max: number, searchWindow = false): { limit: number, offset: number } {
   if (page.cursor !== undefined) {
     throw new UsageError('Spotify uses offset pagination; a cursor is not supported')
   }
@@ -71,7 +92,8 @@ function clampLimit (page: PageRequest, max: number): { limit: number, offset: n
   if (!Number.isInteger(offset) || offset < NO_OFFSET) {
     throw new UsageError('Page offset must be a non-negative integer')
   }
-  return { limit: Math.min(page.limit, max), offset }
+  checkCaps(page.limit, offset, max, searchWindow)
+  return { limit: page.limit, offset }
 }
 
 function pagedPath (base: string, params: { limit: number, offset: number }, extra: Record<string, string> = {}): string {
@@ -112,11 +134,38 @@ function trackQueryText (query: TrackQuery): string {
     if (!ISRC_PATTERN.test(isrc)) {
       throw new UsageError('Not a valid ISRC')
     }
-    // S1 (unverified): relies on the `isrc:` search filter.
+    // S1 (UNVERIFIED): assumes Spotify honors the `isrc:` search filter. If it does not,
+    // the search simply returns other or no tracks; the caller (matching engine) verifies the ISRC.
     return `isrc:${isrc}`
   }
+  // `album` and `durationMs` are deliberately not sent: the search text is title + first artist
+  // (ADR-0003 endpoint table); the matching engine uses those fields to score the returned hits.
   const firstArtist = query.artists.at(NO_OFFSET)
   return firstArtist === undefined ? query.title : `${query.title} ${firstArtist}`
+}
+
+/**
+ * Splits input into canonical refs to add and invalid refs (pushed to `failed`).
+ * With `skipExisting`, refs already present or repeated in the input are left out (neither added nor failed).
+ */
+function planPopulate (
+  trackRefs: string[],
+  existing: Set<string>,
+  skipExisting: boolean,
+  failed: Array<{ ref: string, error: string }>
+): string[] {
+  const valid: string[] = []
+  const seen = new Set<string>()
+  for (const trackRef of trackRefs) {
+    const canonical = parseTrackRef(trackRef)
+    if (canonical === null || !trackRef.startsWith('spotify:track:')) {
+      failed.push({ ref: trackRef, error: 'Not a Spotify track URI' })
+    } else if (!skipExisting || !(existing.has(canonical) || seen.has(canonical))) {
+      seen.add(canonical)
+      valid.push(canonical)
+    }
+  }
+  return valid
 }
 
 export function createSpotifyApiOperations (request: SpotifyApiRequest): SpotifyApiOperations {
@@ -147,7 +196,7 @@ export function createSpotifyApiOperations (request: SpotifyApiRequest): Spotify
     type: SearchType,
     page: PageRequest
   ): ReturnType<SpotifyApiOperations['search']> => {
-    const params = clampLimit(page, SPOTIFY_MAX_SEARCH_PAGE_SIZE)
+    const params = checkPage(page, SPOTIFY_MAX_SEARCH_PAGE_SIZE, true)
     const body = await getJson(operation, pagedPath('/v1/search', params, { q, type }))
     const section = isObject(body) ? body[`${type}s`] : undefined
     const raw = readPaging(section, `search ${type}s`)
@@ -168,12 +217,13 @@ export function createSpotifyApiOperations (request: SpotifyApiRequest): Spotify
     const refs = new Set<string>()
     let offset = NO_OFFSET
     for (;;) {
-      const body = await readPlaylistItems('populatePlaylist', id, { limit: SPOTIFY_MAX_PLAYLIST_ITEMS_PAGE_SIZE, offset }) // eslint-disable-line no-await-in-loop -- sequential: each page depends on the previous offset
+      const body = await readPlaylistItems('populatePlaylist', id, { limit: SCAN_PAGE_SIZE, offset }) // eslint-disable-line no-await-in-loop -- sequential: each page depends on the previous offset
       const raw = readPaging(body, 'playlist items')
       for (const entry of raw.items) {
         const ref = mapTrackWrapper(entry)?.refs.spotify
-        if (ref !== undefined) {
-          refs.add(ref)
+        const canonical = ref === undefined ? null : parseTrackRef(ref)
+        if (canonical !== null) {
+          refs.add(canonical)
         }
       }
       if (!raw.hasNext || raw.items.length === NO_OFFSET) {
@@ -190,7 +240,7 @@ export function createSpotifyApiOperations (request: SpotifyApiRequest): Spotify
     parseTrackRef,
 
     listPlaylists: async (page, filter) => {
-      const params = clampLimit(page, SPOTIFY_MAX_PLAYLISTS_PAGE_SIZE)
+      const params = checkPage(page, SPOTIFY_MAX_PLAYLISTS_PAGE_SIZE)
       const me = await userId('listPlaylists')
       const raw = readPaging(await getJson('listPlaylists', pagedPath('/v1/me/playlists', params)), 'playlists')
       const all = raw.items.flatMap((entry) => entry === null ? [] : [mapPlaylist(entry, me)])
@@ -205,15 +255,26 @@ export function createSpotifyApiOperations (request: SpotifyApiRequest): Spotify
     getPlaylist: async (ref) => {
       const id = requirePlaylistId(ref)
       const me = await userId('getPlaylist')
-      return mapPlaylist(await getJson('getPlaylist', `/v1/playlists/${id}`), me)
+      const body = await getJson('getPlaylist', `/v1/playlists/${id}`).catch((err: unknown) => {
+        if (err instanceof NotFoundError) {
+          throw new NotFoundError('playlist')
+        }
+        throw err
+      })
+      return mapPlaylist(body, me)
     },
 
     getPlaylistTracks: async (ref, page) => {
       const id = requirePlaylistId(ref)
-      const params = clampLimit(page, SPOTIFY_MAX_PLAYLIST_ITEMS_PAGE_SIZE)
+      const params = checkPage(page, SPOTIFY_MAX_PLAYLIST_ITEMS_PAGE_SIZE)
       const body = await readPlaylistItems('getPlaylistTracks', id, params).catch((err: unknown) => {
-        // ADR-0003 Amendment 2: a 403/404 on `/items` means the playlist items are not readable by this user.
-        if (err instanceof NotFoundError || (err instanceof AccessRestrictedError && err.reason === 'other')) {
+        // A 404 is a missing playlist, never an ownership claim. A 403 is reported as `not-owned` per
+        // ADR-0003 Amendment 2 (spike S2, UNVERIFIED: the adapter cannot tell a non-owned playlist
+        // from other 403 causes without an extra request).
+        if (err instanceof NotFoundError) {
+          throw new NotFoundError('playlist')
+        }
+        if (err instanceof AccessRestrictedError && err.reason === 'other') {
           throw new AccessRestrictedError('not-owned')
         }
         throw err
@@ -227,7 +288,7 @@ export function createSpotifyApiOperations (request: SpotifyApiRequest): Spotify
     },
 
     getLikedTracks: async (page) => {
-      const params = clampLimit(page, SPOTIFY_MAX_LIKED_PAGE_SIZE)
+      const params = checkPage(page, SPOTIFY_MAX_LIKED_PAGE_SIZE)
       const raw = readPaging(await getJson('getLikedTracks', pagedPath('/v1/me/tracks', params)), 'liked tracks')
       const tracks = raw.items.flatMap((entry) => {
         const track = mapTrackWrapper(entry)
@@ -279,14 +340,7 @@ export function createSpotifyApiOperations (request: SpotifyApiRequest): Spotify
       const added: string[] = []
       const failed: Array<{ ref: string, error: string }> = []
       const existing = opts.skipExisting ? await existingTrackRefs(id) : new Set<string>()
-      const valid: string[] = []
-      for (const trackRef of trackRefs) {
-        if (parseTrackRef(trackRef) === null || !trackRef.startsWith('spotify:track:')) {
-          failed.push({ ref: trackRef, error: 'Not a Spotify track URI' })
-        } else if (!existing.has(trackRef)) {
-          valid.push(trackRef)
-        }
-      }
+      const valid = planPopulate(trackRefs, existing, opts.skipExisting, failed)
       for (let start = NO_OFFSET; start < valid.length; start += SPOTIFY_MAX_TRACKS_PER_REQUEST) {
         const batch = valid.slice(start, start + SPOTIFY_MAX_TRACKS_PER_REQUEST)
         try {
