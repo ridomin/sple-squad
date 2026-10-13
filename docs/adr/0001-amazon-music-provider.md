@@ -8,7 +8,7 @@
 > **Amendment (2026-10-01):**
 > - The "M4" in this ADR refers to an earlier plan. M4 is now YouTube Music, split into M4a and M4b (`docs/requirements.md` §11).
 > - The capability type and matrix below are superseded by [ADR 0003](0003-provider-interface-and-capabilities.md).
-> - Since February 2026, Spotify no longer returns ISRCs to Development Mode apps (requirements §8). This weakens the ISRC-first assumption below.
+> - Since February 2026, Spotify no longer returns ISRCs to Development Mode apps (requirements §8). This weakens the ISRC-first assumption below. Owner decision S1 (2026-10-13): ISRC search is dropped for Spotify (`isrcSearchMode: 'none'`); this ADR is historical.
 
 ## Context
 

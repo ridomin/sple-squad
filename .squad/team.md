@@ -14,6 +14,7 @@
 |------|------|---------|--------|
 | Lead | Lead | `.squad/agents/lead/charter.md` | ✅ Active |
 | Core Dev | Core/CLI Dev | `.squad/agents/core-dev/charter.md` | ✅ Active |
+| CLI Engineer | CLI/Runtime Engineer | `.squad/agents/cli-engineer/charter.md` | ⏳ Temporary — PR #44 revision only |
 | Provider Dev | Provider Dev | `.squad/agents/provider-dev/charter.md` | ✅ Active |
 | Tester | Tester | `.squad/agents/tester/charter.md` | ✅ Active |
 

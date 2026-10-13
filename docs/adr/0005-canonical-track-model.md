@@ -43,7 +43,7 @@ export interface CanonicalTrack {
 | `artists` | string[] | Yes | Artist display names in the order they appear on the provider (e.g., featured artists). Never empty. |
 | `album` | string | No | Album name if available. Not the album ID; use display name. |
 | `durationMs` | number | No | Track duration in milliseconds. Absent if the provider doesn't report duration. |
-| `isrc` | string \| null | No | International Standard Recording Code (ISRC). Null if the provider doesn't provide it for this track. Absent if not yet resolved. (Spotify still returns `external_ids.isrc`; spike S1 found that the February 2026 removal note does not hold.) |
+| `isrc` | string \| null | No | International Standard Recording Code (ISRC). Null if the provider doesn't provide it for this track. Absent if not yet resolved. (Spotify may return `external_ids.isrc`; this is unverified live. The adapter sets `isrc` when the API returns it. ISRC is not used to search Spotify: owner decision S1, 2026-10-13.) |
 | `refs` | Record<string, string> | Yes | Map of provider ID (e.g., `'spotify'`, `'youtube-music'`) to provider-specific track reference (URI, ID, or API path). At minimum, includes the source provider. As tracks are migrated and matched, refs accumulate. |
 | `addedAt` | string | No | ISO 8601 timestamp (UTC) of when the track was added to the source playlist. Used to preserve insertion order and date context during migration. |
 
@@ -78,7 +78,7 @@ This design allows:
 | `isrc` | `isrc` field | Search by ISRC on the target provider. | High (ISRC is unique and stable). |
 | `metadata` | `title`, `artists`, `album`, `durationMs` | Full-text search or metadata API. | Variable (depends on provider's search algorithm and data quality). |
 
-Adapters attempt strategies in order: known-ref → ISRC → metadata.
+Adapters attempt strategies in order: known-ref → ISRC → metadata. The ISRC step is skipped for targets with `isrcSearchMode: 'none'`, including Spotify (S1, 2026-10-13).
 
 ### 4. Artist list semantics
 
@@ -140,5 +140,5 @@ Format: ISO 8601 UTC (e.g., `"2026-09-01T12:34:56Z"`).
 |---|---|
 | `refs` values use the canonical ref forms of ADR 0003 §3.1 (Spotify `spotify:track:<id>`, YouTube Music the bare 11-character video ID). The §2 example now uses a valid video ID. | Files written by one implementation must be readable by another, and CSV import infers the provider from the ref. |
 | Matching does not call `resolveTrack`. The strategy chain and scoring live in core (ADR 0009 Amendment 1) and call `Provider.searchTracks` (ADR 0003 Amendment 2). §3 and the `resolveTrack` consequence are superseded. | Review decision Q22. |
-| `isrc: null` means the source did not supply one. Spotify search and track objects still carry `external_ids.isrc` (spike S1), so the Spotify adapter sets `isrc` when present (#28). | Corrects §1/§5, which said Spotify never provides ISRC. |
+| `isrc: null` means the source did not supply one. The Spotify adapter sets `isrc` from `external_ids.isrc` when the API returns it (#28); this is not live-verified, and ISRC search is dropped (S1, owner decision 2026-10-13). | Corrects §1/§5, which said Spotify never provides ISRC. |
 | Missing artists map to `["Unknown Artist"]`, a missing title to `"(untitled)"`. | Matches §4's fallback rule and the Spotify adapter. |

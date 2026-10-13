@@ -1,6 +1,14 @@
 {
   "universe_usage_history": [],
-  "assignment_cast_snapshots": {},
-  "transaction_id": "0455c388-e622-463f-a60c-e0fa53f9781e",
-  "registry_revision": 1
+  "assignment_cast_snapshots": {
+    "cli-runtime-revision-2026-10-13": {
+      "universe": "descriptive",
+      "agents": {
+        "cli-engineer": "CLI Engineer"
+      },
+      "created_at": "2026-10-13T08:25:01.919+00:00"
+    }
+  },
+  "transaction_id": "4d1a6667-b708-4763-82c2-7c096217dd3c",
+  "registry_revision": 2
 }
