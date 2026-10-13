@@ -1,4 +1,5 @@
-// Page limits above the declared caps and search `limit + offset > 1000` throw UsageError.
+// Page limits above declared caps are clamped to the cap, keeping next/total visible.
+// Search limit + offset > 1000 throws UsageError (spike S3, UNVERIFIED).
 // The 100-per-request write batch and the scan page size are implementation assumptions
 // (ADR-0003 §5 values, spike S3 unverified), not live-verified Spotify limits.
 // Spotify Web API read/write operations behind the `Provider` interface
@@ -67,21 +68,11 @@ const SEARCH_WINDOW_LIMIT = 1000
 // Implementation choice: the page size used when scanning existing items for `skipExisting`.
 const SCAN_PAGE_SIZE = SPOTIFY_MAX_PLAYLIST_ITEMS_PAGE_SIZE
 
-function checkCaps (limit: number, offset: number, max: number, searchWindow: boolean): void {
-  if (limit > max) {
-    throw new UsageError(`Page limit ${limit} exceeds the maximum of ${max}`)
-  }
-  if (searchWindow && limit + offset > SEARCH_WINDOW_LIMIT) {
-    throw new UsageError(`Search limit + offset must not exceed ${SEARCH_WINDOW_LIMIT}`)
-  }
-}
-
 /**
- * Validates paging input. Callers size pages from `capabilities`, so a limit
- * above the declared cap is a caller error and fails clearly instead of being
- * silently truncated into an incomplete result.
+ * Validates paging input and clamps limits above declared caps.
+ * Search keeps the limit + offset <= 1000 safety guard (S3 unverified).
  */
-function checkPage (page: PageRequest, max: number, searchWindow = false): { limit: number, offset: number } {
+function clampPage (page: PageRequest, max: number, searchWindow = false): { limit: number, offset: number } {
   if (page.cursor !== undefined) {
     throw new UsageError('Spotify uses offset pagination; a cursor is not supported')
   }
@@ -92,8 +83,11 @@ function checkPage (page: PageRequest, max: number, searchWindow = false): { lim
   if (!Number.isInteger(offset) || offset < NO_OFFSET) {
     throw new UsageError('Page offset must be a non-negative integer')
   }
-  checkCaps(page.limit, offset, max, searchWindow)
-  return { limit: page.limit, offset }
+  const limit = Math.min(page.limit, max)
+  if (searchWindow && limit + offset > SEARCH_WINDOW_LIMIT) {
+    throw new UsageError(`Search limit + offset must not exceed ${SEARCH_WINDOW_LIMIT}`)
+  }
+  return { limit, offset }
 }
 
 function pagedPath (base: string, params: { limit: number, offset: number }, extra: Record<string, string> = {}): string {
@@ -196,7 +190,7 @@ export function createSpotifyApiOperations (request: SpotifyApiRequest): Spotify
     type: SearchType,
     page: PageRequest
   ): ReturnType<SpotifyApiOperations['search']> => {
-    const params = checkPage(page, SPOTIFY_MAX_SEARCH_PAGE_SIZE, true)
+    const params = clampPage(page, SPOTIFY_MAX_SEARCH_PAGE_SIZE, true)
     const body = await getJson(operation, pagedPath('/v1/search', params, { q, type }))
     const section = isObject(body) ? body[`${type}s`] : undefined
     const raw = readPaging(section, `search ${type}s`)
@@ -240,7 +234,7 @@ export function createSpotifyApiOperations (request: SpotifyApiRequest): Spotify
     parseTrackRef,
 
     listPlaylists: async (page, filter) => {
-      const params = checkPage(page, SPOTIFY_MAX_PLAYLISTS_PAGE_SIZE)
+      const params = clampPage(page, SPOTIFY_MAX_PLAYLISTS_PAGE_SIZE)
       const me = await userId('listPlaylists')
       const raw = readPaging(await getJson('listPlaylists', pagedPath('/v1/me/playlists', params)), 'playlists')
       const all = raw.items.flatMap((entry) => entry === null ? [] : [mapPlaylist(entry, me)])
@@ -266,15 +260,11 @@ export function createSpotifyApiOperations (request: SpotifyApiRequest): Spotify
 
     getPlaylistTracks: async (ref, page) => {
       const id = requirePlaylistId(ref)
-      const params = checkPage(page, SPOTIFY_MAX_PLAYLIST_ITEMS_PAGE_SIZE)
+      const params = clampPage(page, SPOTIFY_MAX_PLAYLIST_ITEMS_PAGE_SIZE)
       const body = await readPlaylistItems('getPlaylistTracks', id, params).catch((err: unknown) => {
-        // A 404 is a missing playlist, never an ownership claim. A 403 is reported as `not-owned` per
-        // ADR-0003 Amendment 2 (spike S2, UNVERIFIED: the adapter cannot tell a non-owned playlist
-        // from other 403 causes without an extra request).
-        if (err instanceof NotFoundError) {
-          throw new NotFoundError('playlist')
-        }
-        if (err instanceof AccessRestrictedError && err.reason === 'other') {
+        // ADR-0003 Amendment 2 (spike S2, UNVERIFIED): Spotify /items 403 and 404 both map to
+        // AccessRestrictedError('not-owned'). S2 remains unverified; this is the chosen contract.
+        if (err instanceof NotFoundError || (err instanceof AccessRestrictedError && err.reason === 'other')) {
           throw new AccessRestrictedError('not-owned')
         }
         throw err
@@ -288,7 +278,7 @@ export function createSpotifyApiOperations (request: SpotifyApiRequest): Spotify
     },
 
     getLikedTracks: async (page) => {
-      const params = checkPage(page, SPOTIFY_MAX_LIKED_PAGE_SIZE)
+      const params = clampPage(page, SPOTIFY_MAX_LIKED_PAGE_SIZE)
       const raw = readPaging(await getJson('getLikedTracks', pagedPath('/v1/me/tracks', params)), 'liked tracks')
       const tracks = raw.items.flatMap((entry) => {
         const track = mapTrackWrapper(entry)

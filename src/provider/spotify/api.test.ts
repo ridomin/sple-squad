@@ -95,20 +95,23 @@ describe('search', () => {
     assert.equal(album.next, undefined)
   })
 
-  it('fails clearly (no silent clamp) above the declared search page size', async () => {
-    const { api, calls } = setup(() => json({ tracks: { items: [] } }))
-    await assert.rejects(api.search({ text: 'q', type: 'track' }, { limit: 11 }), UsageError)
-    assert.equal(calls.length, 0)
-    await api.search({ text: 'q', type: 'track' }, { limit: 10 })
+  it('clamps limits above the declared search page size and preserves next/total', async () => {
+    const { api, calls } = setup(() => json({
+      tracks: { items: [track()], total: 25, next: 'https://api.spotify.com/v1/search?offset=10&limit=10' }
+    }))
+    const page = await api.search({ text: 'q', type: 'track' }, { limit: 50 })
+    assert.equal(calls.length, 1)
     assert.equal(at(calls, FIRST_CALL).url.searchParams.get('limit'), '10')
+    assert.equal(page.items.length, 1)
+    assert.equal(page.total, 25)
+    assert.deepEqual(page.next, { offset: 1 })
   })
 
-  it('enforces limit + offset <= 1000 (S3, unverified documented ceiling)', async () => {
+  it('enforces limit + offset <= 1000 on clamped search limit (S3, unverified ceiling)', async () => {
     const { api, calls } = setup(() => json({ tracks: { items: [] } }))
-    await assert.rejects(api.search({ text: 'q', type: 'track' }, { limit: 10, offset: 991 }), UsageError)
-    await assert.rejects(api.searchTracks({ kind: 'metadata', title: 't', artists: [] }, { limit: 11 }), UsageError)
+    await assert.rejects(api.search({ text: 'q', type: 'track' }, { limit: 50, offset: 991 }), UsageError)
     assert.equal(calls.length, 0)
-    await api.search({ text: 'q', type: 'track' }, { limit: 10, offset: 990 })
+    await api.search({ text: 'q', type: 'track' }, { limit: 50, offset: 990 })
     assert.equal(at(calls, FIRST_CALL).url.searchParams.get('offset'), '990')
   })
 
@@ -175,6 +178,14 @@ describe('searchTracks', () => {
     const { api, calls } = setup(() => json({}))
     await assert.rejects(api.searchTracks({ kind: 'isrc', isrc: 'bad" OR' }, { limit: 1 }), UsageError)
     assert.equal(calls.length, 0)
+  })
+
+  it('clamps searchTracks limit above the declared search cap and sends limit=10', async () => {
+    const { api, calls } = setup(() => json({ tracks: { items: [track()] } }))
+    const hits = await api.searchTracks({ kind: 'metadata', title: 'Song', artists: [] }, { limit: 50 })
+    assert.equal(calls.length, 1)
+    assert.equal(at(calls, FIRST_CALL).url.searchParams.get('limit'), '10')
+    assert.equal(hits.length, 1)
   })
 
   it('propagates requester errors', async () => {
@@ -258,6 +269,19 @@ describe('listPlaylists', () => {
     await assert.rejects(noId.api.listPlaylists({ limit: 5 }), ProviderError)
   })
 
+  it('clamps limits above the declared playlists page size and keeps next/total', async () => {
+    const { api, calls } = setup((call) => me(call) ?? json({
+      items: [playlist(PL_ID, 'me')],
+      total: 100,
+      next: 'https://api.spotify.com/v1/me/playlists?offset=50&limit=50'
+    }))
+    const page = await api.listPlaylists({ limit: 100 })
+    assert.equal(at(calls, SECOND_CALL).url.searchParams.get('limit'), '50')
+    assert.equal(page.items.length, 1)
+    assert.equal(page.total, 100)
+    assert.deepEqual(page.next, { offset: 1 })
+  })
+
   it('propagates scope errors and retries the identity lookup after a failure', async () => {
     let fail = true
     const { api } = setup((call) => {
@@ -312,21 +336,25 @@ describe('getPlaylistTracks', () => {
     assert.equal((await api.getPlaylistTracks(PL_ID, { limit: 5 })).items.length, 1)
   })
 
-  it('rejects a limit above the page cap', async () => {
-    const { api, calls } = setup(() => json({ items: [] }))
-    await assert.rejects(api.getPlaylistTracks(PL_ID, { limit: 101 }), UsageError)
-    assert.equal(calls.length, 0)
+  it('clamps limits above the declared items page size and preserves next/total', async () => {
+    const { api, calls } = setup(() => json({
+      items: [{ added_at: 'a', item: track() }],
+      total: 250,
+      next: 'https://api.spotify.com/v1/playlists/items?offset=100&limit=100'
+    }))
+    const page = await api.getPlaylistTracks(PL_ID, { limit: 200, offset: 0 })
+    assert.equal(calls.length, 1)
+    assert.equal(at(calls, FIRST_CALL).url.searchParams.get('limit'), '100')
+    assert.equal(page.items.length, 1)
+    assert.equal(page.total, 250)
+    assert.deepEqual(page.next, { offset: 1 })
   })
 
-  it('maps a missing/owned-but-absent playlist 404 on /items to NotFoundError(playlist), not not-owned', async () => {
-    const { api } = failing(new NotFoundError('other'))
-    await assert.rejects(api.getPlaylistTracks(PL_ID, { limit: 5 }), (err: unknown) =>
-      err instanceof NotFoundError && err.resourceType === 'playlist' && !isNotOwned(err))
-  })
-
-  it('reports a 403 on /items as not-owned (ADR-0003 A2, S2 unverified) but keeps other errors', async () => {
-    const { api } = failing(new AccessRestrictedError('other'))
-    await assert.rejects(api.getPlaylistTracks(PL_ID, { limit: 5 }), isNotOwned)
+  it('maps a 404 or 403 on /items to AccessRestrictedError(not-owned) (ADR-0003 A2, S2 unverified) but keeps other errors', async () => {
+    const notFound = failing(new NotFoundError('other'))
+    await assert.rejects(notFound.api.getPlaylistTracks(PL_ID, { limit: 5 }), isNotOwned)
+    const forbidden = failing(new AccessRestrictedError('other'))
+    await assert.rejects(forbidden.api.getPlaylistTracks(PL_ID, { limit: 5 }), isNotOwned)
     const premium = setup(() => new AccessRestrictedError('premium-required'))
     await assert.rejects(premium.api.getPlaylistTracks(PL_ID, { limit: 5 }), (err: unknown) =>
       err instanceof AccessRestrictedError && err.reason === 'premium-required')
@@ -375,8 +403,20 @@ describe('getLikedTracks', () => {
     const { api } = setup(() => json({ items }))
     const page = await api.getLikedTracks({ limit: 50 })
     assert.deepEqual(page.items.map((t) => t.addedAt), ['c'])
-    await assert.rejects(api.getLikedTracks({ limit: 51 }), UsageError)
-    await assert.rejects(api.listPlaylists({ limit: 51 }), UsageError)
+  })
+
+  it('clamps limits above the declared liked page size and preserves next/total', async () => {
+    const { api, calls } = setup(() => json({
+      items: [{ added_at: '2024-02-02T00:00:00Z', track: track() }],
+      total: 150,
+      next: 'https://api.spotify.com/v1/me/tracks?offset=50&limit=50'
+    }))
+    const page = await api.getLikedTracks({ limit: 100 })
+    assert.equal(calls.length, 1)
+    assert.equal(at(calls, FIRST_CALL).url.searchParams.get('limit'), '50')
+    assert.equal(page.items.length, 1)
+    assert.equal(page.total, 150)
+    assert.deepEqual(page.next, { offset: 1 })
   })
 
   it('surfaces scope and API errors and malformed payloads', async () => {
