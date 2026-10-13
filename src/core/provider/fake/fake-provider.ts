@@ -55,6 +55,7 @@ export const DEFAULT_FAKE_CAPABILITIES: ProviderCapabilities = {
   },
   playlistItemsAccess: 'all',
   likedSongs: { read: 'exact', write: false },
+  searchFieldFilters: [],
   isrcSearchMode: 'none',
   searchReturnsDuration: true,
   musicAwareSearch: false,

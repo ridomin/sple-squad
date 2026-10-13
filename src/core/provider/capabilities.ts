@@ -63,6 +63,9 @@ export interface LikedSongsCapability {
  * branching on `ProviderId` (ADR-0003 §1, §5). Declared once per provider
  * (plus the configurable fake provider used in tests).
  */
+/** Native `field:value` search filters a provider understands (FR-SEARCH-3). `isrc:` is gated by `isrcSearchMode === 'filter'`, not listed here. */
+export type SearchFieldFilter = 'artist' | 'album' | 'year'
+
 export interface ProviderCapabilities {
   // identity & policy (NFR-7)
   /** `false` => opt-in rules apply (NFR-7). */
@@ -90,6 +93,8 @@ export interface ProviderCapabilities {
 
   // matching (FR-MIG-2)
   /** Replaces the old `supportsIsrcSearch` boolean. */
+  /** FR-SEARCH-3: field filters `sple search` may leave in the query text; others are a usage error. */
+  searchFieldFilters: SearchFieldFilter[]
   isrcSearchMode: 'lookup' | 'filter' | 'none'
   /** `false` => `searchTracks` fetches details (`getTrackDetails`) to fill `durationMs`. */
   searchReturnsDuration: boolean

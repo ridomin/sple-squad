@@ -294,4 +294,38 @@ describe('sple search', () => {
       assert.match(result.io.stderr.text, testCase.message, testCase.args.join(' '))
     }
   })
+
+  it('passes supported field filters through to the provider unchanged', async () => {
+    const provider = createFakeProvider({ capabilities: { searchFieldFilters: ['artist', 'year'] } })
+    let seen = ''
+    provider.search = async (q) => {
+      ;({ text: seen } = q)
+      return await Promise.resolve({ items: [] })
+    }
+    const { code } = await invoke(['search', 'love', 'artist:Queen', 'year:1975'], provider)
+
+    assert.equal(code, EXIT_CODES.success)
+    assert.equal(seen, 'love artist:Queen year:1975')
+  })
+
+  it('exits 2 for a filter the provider does not support, without searching', async () => {
+    const provider = createFakeProvider({ capabilities: { searchFieldFilters: ['artist'] } })
+    let searched = false
+    provider.search = async () => {
+      searched = true
+      return await Promise.resolve({ items: [] })
+    }
+    const { code, io } = await invoke(['search', 'album:Help'], provider)
+
+    assert.equal(code, EXIT_CODES.usage)
+    assert.match(io.stderr.text, /album: is not supported/v)
+    assert.equal(searched, false)
+  })
+
+  it('exits 2 for isrc: when isrcSearchMode is none', async () => {
+    const { code, io } = await invoke(['search', 'isrc:USRC17607839'])
+
+    assert.equal(code, EXIT_CODES.usage)
+    assert.match(io.stderr.text, /isrc: is not supported/v)
+  })
 })
