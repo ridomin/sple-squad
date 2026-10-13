@@ -3,10 +3,14 @@ import { startCli } from './framework.ts'
 import './commands/auth-login.ts'
 import './commands/auth-logout.ts'
 import './commands/auth-status.ts'
+import { createPlaylistCommands, resolvePlaylistProvider } from './commands/playlist.ts'
 import { createSearchCommand } from './commands/search.ts'
 import { registerCommand } from './registry.ts'
 
 registerCommand(createSearchCommand())
+for (const command of createPlaylistCommands(resolvePlaylistProvider)) {
+  registerCommand(command)
+}
 
 export { parseCommandArguments, parseGlobalArguments } from './args.ts'
 export type {
