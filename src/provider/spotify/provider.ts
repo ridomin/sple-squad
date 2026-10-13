@@ -1,39 +1,16 @@
 import { resolveConfig } from '../../core/config/config.ts'
 import type { TokenStoreOptions } from '../../core/config/token-store.ts'
-import { ProviderError, UsageError } from '../../core/provider/errors.ts'
+import { UsageError } from '../../core/provider/errors.ts'
 import type { Provider, ProviderCapabilities } from '../../core/provider/index.ts'
+import { createSpotifyApiOperations } from './api.ts'
+import { SPOTIFY_API_CAPABILITIES } from './api-capabilities.ts'
 import { loginSpotify } from './auth.ts'
+import { createSpotifyApiClient } from './client.ts'
 import type { SpotifyLoginDependencies } from './auth-types.ts'
 import { getSpotifyAuthStatus, logoutSpotify, type SpotifySessionOptions } from './session.ts'
 
 const SPOTIFY_PROVIDER_ID = 'spotify'
 const SPOTIFY_DISPLAY_NAME = 'Spotify'
-const NO_SUPPORTED_PAGE_SIZE = 0
-const SPOTIFY_ACCOUNT_CAPABILITIES: ProviderCapabilities = {
-  official: true,
-  requiresRiskAcknowledgement: false,
-  userSuppliedClientId: true,
-  requiresClientSecret: false,
-  supportsRefreshToken: true,
-  supportsRevocation: false,
-  paginationModel: 'offset',
-  maxSearchPageSize: NO_SUPPORTED_PAGE_SIZE,
-  readPageSize: {
-    playlists: NO_SUPPORTED_PAGE_SIZE,
-    playlistItems: NO_SUPPORTED_PAGE_SIZE,
-    liked: NO_SUPPORTED_PAGE_SIZE
-  },
-  playlistItemsAccess: 'owned-only',
-  likedSongs: { read: 'none', write: false },
-  isrcSearchMode: 'none',
-  searchReturnsDuration: false,
-  musicAwareSearch: false,
-  canDeletePlaylist: false,
-  supportsCollaborative: false,
-  maxTracksPerRequest: NO_SUPPORTED_PAGE_SIZE,
-  quotaModel: { kind: 'rate-limited' }
-}
-
 export interface CreateSpotifyProviderOptions extends TokenStoreOptions {
   clientId?: string | null
   loginDependencies?: SpotifyLoginDependencies
@@ -41,15 +18,7 @@ export interface CreateSpotifyProviderOptions extends TokenStoreOptions {
   sessionOptions?: SpotifySessionOptions
 }
 
-async function rejectUnsupportedOperation (): Promise<never> {
-  return await Promise.reject(unsupportedOperation())
-}
-
-function unsupportedOperation (): ProviderError {
-  return new ProviderError('Spotify catalog and playlist operations are not implemented yet')
-}
-
-/** Creates Spotify's registered provider surface; catalog operations remain unavailable until their adapter lands. */
+/** Creates Spotify's registered provider surface. */
 export function createSpotifyProvider (options: CreateSpotifyProviderOptions = {}): Provider {
   const clientId = options.clientId === undefined ? resolveConfig().spotifyClientId : options.clientId
   const tokenStoreOptions: TokenStoreOptions = {
@@ -57,10 +26,18 @@ export function createSpotifyProvider (options: CreateSpotifyProviderOptions = {
     ...(options.platformEnv === undefined ? {} : { platformEnv: options.platformEnv })
   }
 
+  const operations = createSpotifyApiOperations(async (operation, method, path, init) => {
+    if (clientId === null) {
+      throw new UsageError('Missing Spotify Client ID. Set SPLE_SPOTIFY_CLIENT_ID in your environment or .env file.')
+    }
+    const client = createSpotifyApiClient({ clientId, ...tokenStoreOptions })
+    return await client.request(operation, method, path, init)
+  })
+
   return {
     id: SPOTIFY_PROVIDER_ID,
     displayName: SPOTIFY_DISPLAY_NAME,
-    capabilities: SPOTIFY_ACCOUNT_CAPABILITIES,
+    capabilities: SPOTIFY_API_CAPABILITIES,
     auth: {
       login: async ({ mode, scopes, interaction }) => {
         if (clientId === null) {
@@ -94,16 +71,6 @@ export function createSpotifyProvider (options: CreateSpotifyProviderOptions = {
       status: async () => await getSpotifyAuthStatus({ ...tokenStoreOptions, ...options.sessionOptions }),
       logout: async () => await logoutSpotify({ ...tokenStoreOptions, ...options.sessionOptions })
     },
-    search: rejectUnsupportedOperation,
-    parsePlaylistRef: () => null,
-    parseTrackRef: () => null,
-    listPlaylists: rejectUnsupportedOperation,
-    getPlaylist: rejectUnsupportedOperation,
-    getPlaylistTracks: rejectUnsupportedOperation,
-    getLikedTracks: rejectUnsupportedOperation,
-    createPlaylist: rejectUnsupportedOperation,
-    removePlaylist: rejectUnsupportedOperation,
-    searchTracks: rejectUnsupportedOperation,
-    populatePlaylist: rejectUnsupportedOperation
+    ...operations
   }
 }
