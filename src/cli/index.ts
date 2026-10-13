@@ -3,12 +3,20 @@ import { startCli } from './framework.ts'
 import './commands/auth-login.ts'
 import './commands/auth-logout.ts'
 import './commands/auth-status.ts'
-import { createPlaylistCommands, resolvePlaylistProvider } from './commands/playlist.ts'
+import { createPlaylistCommands, resolvePlaylist, resolvePlaylistProvider } from './commands/playlist.ts'
+import { createPlaylistMutationCommands } from './commands/playlist-mutations.ts'
 import { createSearchCommand } from './commands/search.ts'
 import { registerCommand } from './registry.ts'
 
 registerCommand(createSearchCommand())
 for (const command of createPlaylistCommands(resolvePlaylistProvider)) {
+  registerCommand(command)
+}
+
+for (const command of createPlaylistMutationCommands({
+  resolvePlaylist,
+  getProvider: resolvePlaylistProvider
+})) {
   registerCommand(command)
 }
 
