@@ -3,7 +3,6 @@ import { parseRetryAfterMs } from '../http/backoff.ts'
 
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token'
 const SPOTIFY_API_URL = 'https://api.spotify.com/v1'
-const SPOTIFY_PREMIUM_URL = 'https://www.spotify.com/premium/'
 const HTTP_UNAUTHORIZED = 401
 const HTTP_FORBIDDEN = 403
 const HTTP_NOT_FOUND = 404
@@ -136,23 +135,12 @@ export async function exchangeAuthorizationCode (
   return parsed
 }
 
-function premiumRequiredError (): AccessRestrictedError {
-  return new AccessRestrictedError(
-    'premium-required',
-    `Spotify Premium is required for Development Mode apps. Subscribe to Premium and retry login: ${SPOTIFY_PREMIUM_URL}`
-  )
-}
-
 function mapSpotifyApiError (status: number, body: unknown, retryAfterMs?: number): Error {
   if (status === HTTP_UNAUTHORIZED) {
     return new AuthRequiredError('token-expired')
   }
   if (status === HTTP_FORBIDDEN) {
-    const error = isRecord(body) && isRecord(body.error) ? body.error : undefined
-    const message = error?.message
-    return typeof message === 'string' && /premium/iv.test(message)
-      ? premiumRequiredError()
-      : new AccessRestrictedError('other')
+    return new AccessRestrictedError('other')
   }
   if (status === HTTP_NOT_FOUND) {
     return new NotFoundError('other')

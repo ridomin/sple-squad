@@ -382,7 +382,7 @@ describe('loginSpotify', () => {
     }))
   })
 
-  it('maps Spotify Premium 403 to an actionable restriction and does not save', async () => {
+  it('maps a Spotify 403 to a generic restriction and does not save', async () => {
     const messages: string[] = []
     let saved = false
 
@@ -392,7 +392,7 @@ describe('loginSpotify', () => {
           if (requestUrl(input) === 'https://accounts.spotify.com/api/token') {
             return Response.json({ access_token: ACCESS_TOKEN, expires_in: 3600 })
           }
-          return Response.json({ error: { message: 'Premium is required' } }, { status: 403 })
+          return Response.json({ error: { message: 'Forbidden' } }, { status: 403 })
         },
         writeStderr: (message) => { messages.push(message) },
         readLine: async () => {
@@ -403,9 +403,7 @@ describe('loginSpotify', () => {
       }),
       (error: unknown) => {
         assert.ok(error instanceof AccessRestrictedError)
-        assert.equal(error.reason, 'premium-required')
-        assert.match(error.message, /Spotify Premium/iv)
-        assert.match(error.message, /https:\/\/www\.spotify\.com\/premium\//v)
+        assert.equal(error.reason, 'other')
         return true
       }
     )
