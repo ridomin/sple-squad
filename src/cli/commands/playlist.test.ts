@@ -139,6 +139,48 @@ describe('playlist list command', () => {
     assert.equal(io.stderr.text, '')
   })
 
+  it('filters by case-insensitive substring and treats regex characters literally', async () => {
+    const provider = createProvider([
+      { id: '1', name: 'Road Trip' },
+      { id: '2', name: 'Chill (Evening)' },
+      { id: '3', name: 'Chill Morning' }
+    ])
+
+    const substring = await run(['playlist', 'list', '--filter', 'chill', '--quiet'], provider)
+    assert.equal(substring.io.stdout.text, '2\n3\n')
+    const literal = await run(['playlist', 'list', '--filter', '(Eve', '--quiet'], provider)
+    assert.equal(literal.io.stdout.text, '2\n')
+  })
+
+  it('filters by /regex/flags and rejects invalid regex', async () => {
+    const provider = createProvider([
+      { id: '1', name: 'Road Trip' },
+      { id: '2', name: 'road 66' },
+      { id: '3', name: 'Chill' }
+    ])
+
+    const sensitive = await run(['playlist', 'list', '--filter', '/^Road/', '--quiet'], provider)
+    assert.equal(sensitive.io.stdout.text, '1\n')
+    const insensitive = await run(['playlist', 'list', '--filter', '/^road \\d+$|trip/i', '--quiet'], provider)
+    assert.equal(insensitive.io.stdout.text, '1\n2\n')
+    const invalid = await run(['playlist', 'list', '--filter', '/(/'], provider)
+    assert.equal(invalid.exitCode, EXIT_CODES.usage)
+    assert.match(invalid.io.stderr.text, /Invalid --filter/v)
+  })
+
+  it('combines --filter with --owned/--followed', async () => {
+    const provider = createProvider([
+      { id: '1', name: 'Mix Mine' },
+      { id: '2', name: 'Mix Theirs', owned: false, itemsReadable: true },
+      { id: '3', name: 'Other', owned: false, itemsReadable: true }
+    ])
+
+    const owned = await run(['playlist', 'list', '--owned', '--filter', 'mix', '--quiet'], provider)
+    assert.equal(owned.io.stdout.text, '1\n')
+    const followed = await run(['playlist', 'list', '--followed', '--filter', 'mix', '--quiet'], provider)
+    assert.equal(followed.io.stdout.text, '2\n')
+  })
+
   it('rejects mutually exclusive filters before listing', async () => {
     const provider = createProvider([{ id: '1', name: 'Mine' }])
     let calls = 0
