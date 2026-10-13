@@ -162,6 +162,21 @@ describe('fake provider: listPlaylists / getPlaylist (offset pagination)', () =>
     assert.equal(result.items[0]?.name, 'Followed Playlist')
   })
 
+  it('clamps the effective limit to readPageSize.playlists and preserves next/total', async () => {
+    const provider = createFakeProvider({
+      fixtures: freshFixtures(),
+      capabilities: { readPageSize: { playlists: 1, playlistItems: 100, liked: 50 } }
+    })
+    const result = await provider.listPlaylists({ limit: 10 })
+    assert.equal(result.items.length, 1)
+    assert.equal(result.total, 2)
+    assert.deepEqual(result.next, { offset: 1 })
+
+    const boundary = await provider.listPlaylists({ limit: 1 })
+    assert.equal(boundary.items.length, 1)
+    assert.deepEqual(boundary.next, { offset: 1 })
+  })
+
   it('getPlaylist returns metadata even when itemsReadable is false', async () => {
     const provider = createFakeProvider({ fixtures: freshFixtures() })
     const summary = await provider.getPlaylist('2')
@@ -211,6 +226,39 @@ describe('fake provider: getPlaylistTracks', () => {
     assert.equal(page.items.length, 1)
     assert.equal(page.items[0]?.title, 'Song Two')
   })
+
+  it('clamps the effective limit to readPageSize.playlistItems and preserves next/total', async () => {
+    const provider = createFakeProvider({
+      fixtures: freshFixtures(),
+      capabilities: { readPageSize: { playlists: 50, playlistItems: 1, liked: 50 } }
+    })
+    const result = await provider.getPlaylistTracks('1', { limit: 10 })
+    assert.equal(result.items.length, 1)
+    assert.equal(result.total, 2)
+    assert.deepEqual(result.next, { offset: 1 })
+
+    const boundary = await provider.getPlaylistTracks('1', { limit: 1 })
+    assert.equal(boundary.items.length, 1)
+    assert.deepEqual(boundary.next, { offset: 1 })
+  })
+
+  it('supports complete traversal across clamped pages without silent truncation', async () => {
+    const provider = createFakeProvider({
+      fixtures: freshFixtures(),
+      capabilities: { readPageSize: { playlists: 50, playlistItems: 1, liked: 50 } }
+    })
+    const collected: string[] = []
+    let nextOffset: number | undefined = 0
+    while (nextOffset !== undefined) {
+      // eslint-disable-next-line no-await-in-loop -- sequential paging traversal
+      const page = await provider.getPlaylistTracks('1', { limit: 100, offset: nextOffset })
+      for (const item of page.items) {
+        collected.push(item.title)
+      }
+      nextOffset = page.next?.offset
+    }
+    assert.deepEqual(collected, ['Song One', 'Song Two'])
+  })
 })
 
 describe('fake provider: getLikedTracks', () => {
@@ -221,6 +269,21 @@ describe('fake provider: getLikedTracks', () => {
     assert.equal(result.items[0]?.title, 'Song Two')
     assert.deepEqual(result.next, { offset: 1 })
     assert.equal(result.total, 2)
+  })
+
+  it('clamps the effective limit to readPageSize.liked and preserves next/total', async () => {
+    const provider = createFakeProvider({
+      fixtures: freshFixtures(),
+      capabilities: { readPageSize: { playlists: 50, playlistItems: 100, liked: 1 } }
+    })
+    const result = await provider.getLikedTracks({ limit: 10 })
+    assert.equal(result.items.length, 1)
+    assert.equal(result.total, 2)
+    assert.deepEqual(result.next, { offset: 1 })
+
+    const boundary = await provider.getLikedTracks({ limit: 1 })
+    assert.equal(boundary.items.length, 1)
+    assert.deepEqual(boundary.next, { offset: 1 })
   })
 
   it('returns an empty page when no tracks are liked', async () => {
@@ -332,6 +395,18 @@ describe('fake provider: searchTracks and populatePlaylist (ADR-0003 Amendment 2
     const provider = createFakeProvider({ fixtures: freshFixtures() })
     const hits = await provider.searchTracks({ kind: 'metadata', title: 'Song', artists: ['Artist A'] }, { limit: 1 })
     assert.equal(hits.length, 1)
+  })
+
+  it('clamps searchTracks limit to maxSearchPageSize', async () => {
+    const provider = createFakeProvider({
+      fixtures: freshFixtures(),
+      capabilities: { maxSearchPageSize: 1 }
+    })
+    const hits = await provider.searchTracks({ kind: 'metadata', title: 'Song', artists: [] }, { limit: 10 })
+    assert.equal(hits.length, 1)
+
+    const boundary = await provider.searchTracks({ kind: 'metadata', title: 'Song', artists: [] }, { limit: 1 })
+    assert.equal(boundary.length, 1)
   })
 
   it('populatePlaylist adds valid refs in order and reports unknown refs as failed', async () => {
