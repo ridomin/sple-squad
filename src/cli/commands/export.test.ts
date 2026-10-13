@@ -202,6 +202,9 @@ test('the --all caller writes an index and records unreadable playlists as skipp
   assert.equal(skipped.length, 1)
   assert.equal(asRecord(skipped[0]).status, 'skipped')
   assert.equal(asRecord(skipped[0]).reason, 'not-owned')
+  assert.equal(asRecord(skipped[0]).id, 'private-2')
+  assert.equal(asRecord(skipped[0]).name, 'Private')
+  assert.match(io.stderr.text, /exported 2 of 3 playlists; 1 skipped/v)
   assert.match(io.stderr.text, /Could not export "private-2"/v)
 
   const playlistPath = join(directory, 'cafe-mix-mix-1.json')
@@ -216,6 +219,29 @@ test('the --all caller writes an index and records unreadable playlists as skipp
   const afterForce = parseRecord(await readFile(playlistPath, 'utf8'))
   assert.equal(asRecord(afterForce.playlist).name, PLAYLIST_NAME)
   assert.equal(asArray(afterForce.tracks).length, 1)
+})
+
+test('--all combined with --liked includes Liked Songs exactly once in the directory and index', async () => {
+  const provider = createFakeProvider({
+    fixtures: {
+      catalog: [{ id: CATALOG_TRACK_ID, title: 'Luminous', artists: ['Artist'], isrc: null }],
+      playlists: [{ id: PLAYLIST_ID, name: PLAYLIST_NAME, owner: { id: 'owner-1' }, trackIds: [CATALOG_TRACK_ID] }],
+      liked: [CATALOG_TRACK_ID]
+    }
+  })
+  const directory = join(testRoot, 'all-liked-output')
+  const { code } = await invoke(['export', '--all', '--liked', '-o', directory], provider)
+  assert.equal(code, 0)
+  assert.deepEqual((await readdir(directory)).sort(), ['cafe-mix-mix-1.json', 'index.json', 'liked-songs.json'])
+  const index = parseRecord(await readFile(join(directory, 'index.json'), 'utf8'))
+  assert.equal(asArray(index.files).length, 2)
+  assert.deepEqual(asArray(index.skipped), [])
+})
+
+test('--all requires an output directory', async () => {
+  const { code, io } = await invoke(['export', '--all'], createFakeProvider())
+  assert.equal(code, 2)
+  assert.match(io.stderr.text, /--all requires -o <directory>/v)
 })
 
 test('Liked Songs requires Spotify library scope and names the canonical source', async () => {
