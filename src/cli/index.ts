@@ -4,6 +4,7 @@ import './commands/auth-login.ts'
 import './commands/auth-logout.ts'
 import './commands/auth-status.ts'
 import { createPlaylistCommands, resolvePlaylist, resolvePlaylistProvider } from './commands/playlist.ts'
+import { createPlaylistEditCommand } from './commands/playlist-edit.ts'
 import { createPlaylistMutationCommands } from './commands/playlist-mutations.ts'
 import { createSearchCommand } from './commands/search.ts'
 import { registerCommand } from './registry.ts'
@@ -19,6 +20,11 @@ for (const command of createPlaylistMutationCommands({
 })) {
   registerCommand(command)
 }
+
+registerCommand(createPlaylistEditCommand({
+  resolvePlaylist,
+  getProvider: resolvePlaylistProvider
+}))
 
 export { parseCommandArguments, parseGlobalArguments } from './args.ts'
 export type {
