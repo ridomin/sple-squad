@@ -1,7 +1,7 @@
 import { resolveConfig } from '../../core/config/config.ts'
 import type { TokenStoreOptions } from '../../core/config/token-store.ts'
 import { UsageError } from '../../core/provider/errors.ts'
-import type { Provider, ProviderCapabilities } from '../../core/provider/index.ts'
+import type { Provider } from '../../core/provider/index.ts'
 import { createSpotifyApiOperations } from './api.ts'
 import { SPOTIFY_API_CAPABILITIES } from './api-capabilities.ts'
 import { loginSpotify } from './auth.ts'
