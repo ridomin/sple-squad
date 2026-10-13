@@ -203,6 +203,8 @@ export interface PlaylistRemoveOutput {
 }
 ```
 
+`playlist remove <playlist>` resolves IDs, URIs, URLs, and names using ADR 0003 §3.2; ambiguous names are a usage error (exit 2). It confirms the provider-specific action unless `--yes` is passed. A non-terminal stdin without `--yes` is a usage error, while `--dry-run` never prompts or changes data. When `canDeletePlaylist` is false (as on Spotify), the command reports that it unfollows the playlist rather than deleting it.
+
 #### 3.6 `sple export`
 
 ```ts
@@ -478,4 +480,3 @@ Supersedes the "implemented in-house, no `debug` dependency" rule in §6 and the
 |---|---|
 | A2 error message | `AuthRequiredError` with reason `revoked` and no `scope` prints the error's own message, which names the provider and the login command. Other `AuthRequiredError`s are unchanged. |
 | §3.7 / A10 `auth status` | When the stored token has `refreshTokenExpiresAt`, the human form adds `  Refresh token expires: <ISO>` after `Token expires`. If it has passed, the line ends in ` (expired)` and stderr gets `Warning: <Provider> refresh token has expired; run "sple auth login --provider <id>"` instead of the "will be refreshed on next use" warning. `--json` adds `refreshTokenExpiresAt` (omitted when unknown). Status still makes no network call. |
-

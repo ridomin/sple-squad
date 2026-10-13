@@ -1,7 +1,8 @@
 import { UsageError } from '../core/provider/errors.ts'
 import type { CommandDefinition } from './args.ts'
+import { createExportCommand } from './commands/export.ts'
 
-const registeredCommands: CommandDefinition[] = []
+const registeredCommands: CommandDefinition[] = [createExportCommand()]
 
 export function registerCommand (command: CommandDefinition): void {
   const key = command.path.join(' ')
