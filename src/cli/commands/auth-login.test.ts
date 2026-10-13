@@ -59,6 +59,19 @@ describe('sple auth login', () => {
       },
       saveToken: async () => { await Promise.resolve() }
     }
+    const loginResult: SpotifyLoginResult & {
+      accessToken: string
+      refreshToken: string
+      authorizationCode: string
+    } = {
+      userId: 'test-user',
+      displayName: 'Test User',
+      scopes: ['playlist-read-private', 'user-library-read'],
+      expiresAt: '2026-10-13T09:00:00.000Z',
+      accessToken: 'secret-access-token',
+      refreshToken: 'secret-refresh-token',
+      authorizationCode: 'secret-authorization-code'
+    }
     const login = async (
       options: SpotifyLoginOptions,
       dependencies?: SpotifyLoginDependencies
@@ -67,7 +80,7 @@ describe('sple auth login', () => {
       actualDependencies = dependencies
       dependencies?.writeStderr?.('Waiting for authorization...')
       await Promise.resolve()
-      return { userId: 'test-user', scopes: [] }
+      return loginResult
     }
 
     assert.equal(await runCli(['auth', 'login'], {
@@ -80,10 +93,23 @@ describe('sple auth login', () => {
     assert.equal(actualDependencies?.openBrowser, oauthDependencies.openBrowser)
     assert.equal(actualDependencies?.readLine, oauthDependencies.readLine)
     assert.equal(actualDependencies?.saveToken, oauthDependencies.saveToken)
-    assert.equal(io.stdout.text, 'Spotify login successful.\n')
+    assert.equal(io.stdout.text, [
+      'Logged in to Spotify',
+      'User: Test User',
+      'Scopes: playlist-read-private, user-library-read',
+      'Token expires: 2026-10-13T09:00:00.000Z',
+      ''
+    ].join('\n'))
     assert.equal(io.stderr.text, 'Waiting for authorization...\n')
-    assert.equal(io.stdout.text.includes(CLIENT_ID), false)
-    assert.equal(io.stderr.text.includes(CLIENT_ID), false)
+    const output = `${io.stdout.text}${io.stderr.text}`
+    for (const secret of [
+      CLIENT_ID,
+      loginResult.accessToken,
+      loginResult.refreshToken,
+      loginResult.authorizationCode
+    ]) {
+      assert.equal(output.includes(secret), false)
+    }
   })
 
   it('maps --no-browser and --manual to provider modes', async () => {
@@ -104,7 +130,8 @@ describe('sple auth login', () => {
         processEnv: { SPLE_SPOTIFY_CLIENT_ID: CLIENT_ID }
       }), EXIT_CODES.success)
       assert.deepEqual(actualOptions, { clientId: CLIENT_ID, mode: testCase.mode })
-      assert.equal(io.stdout.text, 'Spotify login successful.\n')
+      assert.equal(io.stdout.text, 'Logged in to Spotify\nUser: test-user\nScopes: none\n')
+      assert.equal(io.stderr.text, '')
     }))
   })
 

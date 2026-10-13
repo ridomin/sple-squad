@@ -3,7 +3,8 @@ import {
   loginSpotify,
   type SpotifyLoginDependencies,
   type SpotifyLoginMode,
-  type SpotifyLoginOptions
+  type SpotifyLoginOptions,
+  type SpotifyLoginResult
 } from '../../provider/spotify/index.ts'
 import type { CommandContext, CommandDefinition } from '../args.ts'
 import { registerCommand } from '../registry.ts'
@@ -63,11 +64,24 @@ async function runAuthLogin (
       ? 'no-browser'
       : 'loopback'
   const options: SpotifyLoginOptions = { clientId: spotifyClientId, mode }
-  await login(options, {
+  const result = await login(options, {
     writeStderr: message => { stderr.write(`${message}\n`) },
     ...dependencies
   })
-  stdout.write('Spotify login successful.\n')
+  stdout.write(formatLoginSuccess(result))
+}
+
+function formatLoginSuccess (result: SpotifyLoginResult): string {
+  const grantedScopes = result.scopes.join(', ')
+  const lines = [
+    'Logged in to Spotify',
+    `User: ${result.displayName ?? result.userId}`,
+    `Scopes: ${grantedScopes === '' ? 'none' : grantedScopes}`
+  ]
+  if (result.expiresAt !== undefined) {
+    lines.push(`Token expires: ${result.expiresAt}`)
+  }
+  return `${lines.join('\n')}\n`
 }
 
 registerCommand(createAuthLoginCommand())
