@@ -127,7 +127,14 @@ function paginate<T> (items: readonly T[], request: PageRequest): Page<T> {
 export function createFakeProvider (options: CreateFakeProviderOptions = {}): Provider {
   const { fixtures: fixturesOption, capabilities: capabilityOverrides, displayName: displayNameOption } = options
   const fixtures = normalizeFixtures(fixturesOption ?? {})
-  const capabilities: ProviderCapabilities = { ...DEFAULT_FAKE_CAPABILITIES, ...capabilityOverrides }
+  const capabilities: ProviderCapabilities = {
+    ...DEFAULT_FAKE_CAPABILITIES,
+    ...capabilityOverrides,
+    readPageSize: {
+      ...DEFAULT_FAKE_CAPABILITIES.readPageSize,
+      ...capabilityOverrides?.readPageSize
+    }
+  }
   const displayName = displayNameOption ?? DEFAULT_DISPLAY_NAME
 
   const catalogByRef = new Map<string, FakeTrackFixture>(
@@ -261,9 +268,8 @@ export function createFakeProvider (options: CreateFakeProviderOptions = {}): Pr
 
     search: async (q, page) => {
       const { type, text } = q
-      const { limit, offset } = page
-      const effectiveLimit = Math.min(limit, capabilities.maxSearchPageSize)
-      const request: PageRequest = offset === undefined ? { limit: effectiveLimit } : { limit: effectiveLimit, offset }
+      const effectiveLimit = Math.min(page.limit, capabilities.maxSearchPageSize)
+      const request: PageRequest = { ...page, limit: effectiveLimit }
 
       const items: SearchItem[] = type === 'track'
         ? searchCatalogTracks(text)
@@ -292,7 +298,9 @@ export function createFakeProvider (options: CreateFakeProviderOptions = {}): Pr
       const filtered = filter === undefined
         ? all
         : all.filter((summary) => (filter === 'owned' ? summary.owned : !summary.owned))
-      return await Promise.resolve(paginate(filtered, page))
+      const effectiveLimit = Math.min(page.limit, capabilities.readPageSize.playlists)
+      const request: PageRequest = { ...page, limit: effectiveLimit }
+      return await Promise.resolve(paginate(filtered, request))
     },
 
     getPlaylist: async (ref) => await Promise.resolve(findPlaylist(ref).summary),
@@ -303,12 +311,16 @@ export function createFakeProvider (options: CreateFakeProviderOptions = {}): Pr
         throw new AccessRestrictedError('not-owned', `Playlist '${ref}' is not readable`)
       }
       const tracks = playlist.trackRefs.map((trackRefValue) => toCanonicalTrack(findCatalogTrack(trackRefValue)))
-      return await Promise.resolve(paginate(tracks, page))
+      const effectiveLimit = Math.min(page.limit, capabilities.readPageSize.playlistItems)
+      const request: PageRequest = { ...page, limit: effectiveLimit }
+      return await Promise.resolve(paginate(tracks, request))
     },
 
     getLikedTracks: async (page) => {
       const tracks = likedRefs.map((ref) => toCanonicalTrack(findCatalogTrack(ref)))
-      return await Promise.resolve(paginate(tracks, page))
+      const effectiveLimit = Math.min(page.limit, capabilities.readPageSize.liked)
+      const request: PageRequest = { ...page, limit: effectiveLimit }
+      return await Promise.resolve(paginate(tracks, request))
     },
 
     createPlaylist: async (input) => {
@@ -358,13 +370,13 @@ export function createFakeProvider (options: CreateFakeProviderOptions = {}): Pr
     },
 
     searchTracks: async (query, opts) => {
-      const { limit } = opts
+      const effectiveLimit = Math.min(opts.limit, capabilities.maxSearchPageSize)
       const hits: TrackHit[] = catalogTracks()
         .filter((fixture) => (query.kind === 'isrc'
           ? fixture.isrc !== undefined && fixture.isrc !== null && fixture.isrc === query.isrc
           : matchesMetadataQuery(fixture, query)))
         .map((fixture) => ({ ref: trackRef(fixture.id), track: toCanonicalTrack(fixture) }))
-        .slice(DEFAULT_OFFSET, limit)
+        .slice(DEFAULT_OFFSET, effectiveLimit)
       return await Promise.resolve(hits)
     },
 
